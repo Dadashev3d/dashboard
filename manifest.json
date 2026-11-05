@@ -1,0 +1,17 @@
+{
+  "name": "Мой дашборд",
+  "short_name": "Дашборд",
+  "description": "Задачи, календарь, финансы, расходы шоу и биржи — общие данные с компьютером через Google",
+  "lang": "ru",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#171412",
+  "theme_color": "#171412",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

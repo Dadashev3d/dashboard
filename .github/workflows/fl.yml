@@ -1,0 +1,19 @@
+# Робот: раз в 30 минут обновляет ленту FL.ru (fl.json) для мобильной версии
+name: Лента FL.ru
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+permissions:
+  contents: write
+jobs:
+  fl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python fl_fetch.py
+      - run: |
+          git config user.name "fl-bot"
+          git config user.email "fl-bot@users.noreply.github.com"
+          git add fl.json
+          git diff --cached --quiet || (git commit -m "Лента FL.ru" && git push)

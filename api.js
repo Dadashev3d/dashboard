@@ -1,0 +1,270 @@
+/* Мобильная версия «Мой дашборд».
+   Заменяет Python-часть настольной программы (window.pywebview.api) на работу прямо в браузере телефона:
+   данные — в памяти телефона (localStorage) + копия в Google Диске (та же, что у компьютера),
+   почта и биржи — через Gmail API. Вход Google — по кнопке, без паролей в программе. */
+(() => {
+  const CFG = window.MOBILE_CONFIG || {};
+  const KEY = 'dashboard.v1';
+  const TOK = 'mobile.token';
+  const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/drive.appdata'];
+  const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me';
+  const FILES = 'https://www.googleapis.com/drive/v3/files';
+  const UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files';
+  const NAME = 'mydashboard-backup.json';
+  const redirectUri = () => CFG.redirectUri || (location.origin + location.pathname);
+
+  // ---------- Вход Google (токен на 1 час; продлевается сам при следующем открытии) ----------
+  // Ответ Google приходит в адресе страницы после «#»: забираем токен и чистим адрес.
+  (function takeTokenFromUrl() {
+    if (!location.hash.includes('access_token=') && !location.hash.includes('error=')) return;
+    const p = new URLSearchParams(location.hash.slice(1));
+    if (p.get('access_token')) {
+      localStorage.setItem(TOK, JSON.stringify({
+        t: p.get('access_token'), exp: Date.now() + (+p.get('expires_in') || 3600) * 1000 - 60000,
+        scope: p.get('scope') || '', ever: true,
+      }));
+    } else if (p.get('error')) {
+      sessionStorage.setItem('mobile.authError', p.get('error'));
+      // тихое продление не удалось (нужно подтвердить вход) — покажем кнопку «Войти»
+      const old = tok(); if (old) { old.exp = 0; localStorage.setItem(TOK, JSON.stringify(old)); }
+    }
+    history.replaceState(null, '', location.pathname + location.search);
+  })();
+  function tok() { try { return JSON.parse(localStorage.getItem(TOK)); } catch { return null; } }
+  const tokenValid = () => { const t = tok(); return !!(t && t.t && t.exp > Date.now()); };
+  const everConnected = () => !!tok()?.ever;
+  function signIn(silent = false) {
+    if (!CFG.clientId) { alert('В мобильной версии не указан ключ Google (config.js).'); return; }
+    const q = new URLSearchParams({
+      client_id: CFG.clientId, redirect_uri: redirectUri(), response_type: 'token',
+      scope: SCOPES.join(' '), include_granted_scopes: 'true',
+    });
+    if (silent) q.set('prompt', 'none');
+    sessionStorage.setItem('mobile.silentTry', String(Date.now()));
+    location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + q;
+  }
+  // Токен истёк, а вход уже был — тихо продлить (страница на миг перезагрузится). Не чаще раза в 2 минуты.
+  function renewIfNeeded() {
+    if (tokenValid() || !everConnected() || !CFG.clientId) return false;
+    const last = +sessionStorage.getItem('mobile.silentTry') || 0;
+    if (Date.now() - last < 120000 || sessionStorage.getItem('mobile.authError')) return false;
+    if (pending()) localStorage.setItem(KEY + '.unsent', '1');
+    signIn(true);
+    return true;
+  }
+  async function gfetch(url, opts = {}) {
+    if (!tokenValid()) throw Object.assign(new Error('Нужно войти в Google'), { auth: true });
+    const r = await fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + tok().t } });
+    if (r.status === 401) { const t = tok(); if (t) { t.exp = 0; localStorage.setItem(TOK, JSON.stringify(t)); } throw Object.assign(new Error('Вход Google истёк'), { auth: true }); }
+    return r;
+  }
+  const hasScope = (s) => (tok()?.scope || '').includes(s);
+
+  // ---------- Почта ----------
+  function parseFrom(v = '') {
+    const m = v.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>/);
+    return m ? { name: m[1].trim(), addr: m[2].trim() } : { name: '', addr: v.trim() };
+  }
+  async function fetchMsgs(query, limit) {
+    const ids = await (await gfetch(`${GMAIL}/messages?` + new URLSearchParams({ q: query, maxResults: limit }))).json();
+    const list = ids.messages || [];
+    return Promise.all(list.map(async (m) => {
+      const msg = await (await gfetch(`${GMAIL}/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`)).json();
+      const h = {}; (msg.payload?.headers || []).forEach((x) => h[x.name.toLowerCase()] = x.value);
+      const f = parseFrom(h.from);
+      return {
+        id: m.id, from: f.name || f.addr, email: f.addr, subject: h.subject || '(без темы)',
+        snippet: (msg.snippet || '').replace(/\s+/g, ' ').slice(0, 300), ts: +msg.internalDate || 0,
+        link: `https://mail.google.com/mail/u/0/#all/${m.id}`, unread: (msg.labelIds || []).includes('UNREAD'),
+      };
+    }));
+  }
+  let email = localStorage.getItem('mobile.email') || '';
+  async function loadEmail() {
+    if (email || !tokenValid()) return;
+    try { email = (await (await gfetch(`${GMAIL}/profile`)).json()).emailAddress || ''; localStorage.setItem('mobile.email', email); } catch {}
+  }
+
+  // ---------- Биржи (то же, что exchanges.py на компьютере) ----------
+  const EXCHANGES = [
+    { key: 'kwork', domains: ['kwork.ru', 'kwork.com'] }, { key: 'fl', domains: ['fl.ru'] },
+    { key: 'freelance', domains: ['freelance.ru', 'free-lance.ru'] }, { key: 'freelancer', domains: ['freelancer.com'] },
+    { key: 'upwork', domains: ['upwork.com'] }, { key: 'fiverr', domains: ['fiverr.com'] },
+  ];
+  const KINDS = [
+    ['payment', /оплат|выплат|зачислен|поступ|вывод|баланс|деньги|заработ|payment|paid|funds|earning|withdraw|payout|cleared/],
+    ['message', /сообщени|написал|ответил|переписк|комментар|message|messaged|replied|chat/],
+    ['order', /заказ|проект|задани|предложени|приглаш|отклик|выбрали|исполнител|кворк|order|job|offer|invit|proposal|contract|hired|gig/],
+  ];
+  const AMOUNTS = [
+    [/(\d[\d\s ]*(?:[.,]\d{1,2})?)\s?(?:₽|руб\.?|р\.)/i, 'RUB'], [/\$\s?(\d[\d,]*(?:\.\d{1,2})?)/, 'USD'],
+    [/(\d[\d,]*(?:\.\d{1,2})?)\s?(?:USD|долл)/i, 'USD'], [/€\s?(\d[\d,]*(?:\.\d{1,2})?)/, 'EUR'],
+    [/(\d[\d\s ]*(?:[.,]\d{1,2})?)\s?(?:€|EUR|евро)/i, 'EUR'],
+  ];
+  const exFor = (addr) => { addr = (addr || '').toLowerCase(); return EXCHANGES.find((e) => e.domains.some((d) => addr.endsWith('@' + d) || addr.endsWith('.' + d))); };
+  const kindOf = (t) => { t = t.toLowerCase(); const k = KINDS.find(([, rx]) => rx.test(t)); return k ? k[0] : 'other'; };
+  function amountOf(text) {
+    for (const [rx, cur] of AMOUNTS) {
+      const m = text.match(rx); if (!m) continue;
+      let raw = m[1].replace(/[\s ]/g, '');
+      raw = cur === 'USD' || (raw.includes('.') && raw.includes(',')) ? raw.replace(/,/g, '') : raw.replace(',', '.');
+      const n = parseFloat(raw); if (!isNaN(n)) return [n, cur];
+    }
+    return [null, null];
+  }
+  let exCache = { t: 0, data: null };
+
+  // ---------- Копия в Google Диске (общая с компьютером) ----------
+  async function findFile() {
+    const r = await gfetch(`${FILES}?` + new URLSearchParams({ spaces: 'appDataFolder', q: `name = '${NAME}'`, fields: 'files(id, modifiedTime, size)' }));
+    if (!r.ok) throw new Error(await explain(r));
+    return (await r.json()).files?.[0] || null;
+  }
+  async function explain(r) {
+    try { const e = (await r.json()).error || {}; return /has not been used|disabled/i.test(e.message || '') ? 'В проекте Google не включён Google Drive API' : 'Google Диск: ' + (e.message || r.status); }
+    catch { return 'Google Диск: ошибка ' + r.status; }
+  }
+  const meaningful = (d) => { try { const o = JSON.parse(d); return !!(o.name || ['tasks', 'projects', 'notes', 'habits', 'tx', 'events'].some((k) => o[k]?.length) || o.show?.items?.length); } catch { return false; } };
+  async function upload(data, auto) {
+    const f = await findFile();
+    if (auto && f && (!meaningful(data) || (+f.size > 4000 && new Blob([data]).size < +f.size * 0.4)))
+      return { ok: false, skipped: true, error: 'автокопия пропущена: на телефоне намного меньше данных, чем в копии Google' };
+    let r;
+    if (f) {
+      r = await gfetch(`${UPLOAD}/${f.id}?uploadType=media&fields=id,modifiedTime`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: data });
+    } else {
+      const b = 'mydashboard-boundary';
+      const body = `--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name: NAME, parents: ['appDataFolder'] })}\r\n--${b}\r\nContent-Type: application/json\r\n\r\n${data}\r\n--${b}--`;
+      r = await gfetch(`${UPLOAD}?uploadType=multipart&fields=id,modifiedTime`, { method: 'POST', headers: { 'Content-Type': `multipart/related; boundary=${b}` }, body });
+    }
+    if (!r.ok) return { ok: false, error: await explain(r) };
+    return { ok: true, last: (await r.json()).modifiedTime };
+  }
+  // Автокопия: через 3 с после правки, не дольше 15 с при непрерывных правках
+  let pendingData = null, firstAt = 0, timer = null, busy = false, last = null;
+  const pending = () => pendingData !== null || localStorage.getItem(KEY + '.unsent') === '1';
+  function schedule(data) {
+    pendingData = data; localStorage.setItem(KEY + '.unsent', '1');
+    firstAt = firstAt || Date.now();
+    clearTimeout(timer);
+    timer = setTimeout(push, Math.max(0, Math.min(3000, firstAt + 15000 - Date.now())));
+  }
+  async function push() {
+    if (busy) { timer = setTimeout(push, 1500); return; }
+    const data = pendingData ?? localStorage.getItem(KEY);
+    pendingData = null; firstAt = 0;
+    if (!data || !tokenValid() || !hasScope('drive.appdata')) return; // отправим после входа (флаг unsent остаётся)
+    busy = true;
+    try {
+      last = { ...(await upload(data, true)), at: Date.now() / 1000 };
+      if (last.ok && pendingData === null) localStorage.removeItem(KEY + '.unsent');
+    } catch (e) { last = { ok: false, error: e.message, at: Date.now() / 1000 }; } finally { busy = false; }
+  }
+
+  // ---------- Файлы ----------
+  function pickFile() {
+    return new Promise((res) => {
+      const i = Object.assign(document.createElement('input'), { type: 'file', accept: '.json,application/json' });
+      i.onchange = () => { const f = i.files[0]; if (!f) return res(null); const rd = new FileReader(); rd.onload = () => res(rd.result); rd.readAsText(f); };
+      i.click();
+    });
+  }
+
+  // ---------- API — те же функции, что у настольной программы ----------
+  const api = {
+    load: async () => localStorage.getItem(KEY),
+    save: async (data, backup = true) => { localStorage.setItem(KEY, data); if (backup) schedule(data); return true; },
+    open_url: async (u) => { if (/^https?:\/\//.test(u)) window.open(u, '_blank', 'noopener'); return true; },
+    launch_chrome: async () => { window.open('https://www.google.com', '_blank', 'noopener'); return true; },
+    open_data_folder: async () => true,
+    export_backup: async (text, name) => {
+      const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([text], { type: 'application/json' })), download: name });
+      document.body.appendChild(a); a.click(); a.remove(); return true;
+    },
+    import_backup: pickFile,
+
+    gmail_status: async () => { await loadEmail(); return { hasClient: !!CFG.clientId, connected: tokenValid() || everConnected(), email, drive: hasScope('drive.appdata') }; },
+    gmail_choose_client_file: async () => api.gmail_status(),
+    gmail_connect: async () => { sessionStorage.removeItem('mobile.authError'); signIn(false); return new Promise(() => {}); },
+    gmail_disconnect: async () => { localStorage.removeItem(TOK); localStorage.removeItem('mobile.email'); email = ''; return api.gmail_status(); },
+    gmail_unread: async () => {
+      if (!tokenValid()) return everConnected() ? { connected: true, messages: [], error: 'Вход Google истёк — откройте «Настройки» → «Войти через Google»' } : { connected: false };
+      try {
+        const total = (await (await gfetch(`${GMAIL}/labels/INBOX`)).json()).messagesUnread || 0;
+        return { connected: true, total, messages: await fetchMsgs('is:unread in:inbox', 5) };
+      } catch (e) { return { connected: true, error: e.message, messages: [] }; }
+    },
+
+    exchanges_mail: async (force = false) => {
+      if (!force && exCache.data && Date.now() - exCache.t < 120000) return exCache.data;
+      if (!tokenValid()) return { gmail: everConnected(), items: [] };
+      const domains = EXCHANGES.flatMap((e) => e.domains);
+      let msgs = [];
+      try { msgs = await fetchMsgs(`from:(${domains.join(' OR ')}) newer_than:30d`, 40); } catch {}
+      const items = msgs.map((m) => {
+        const ex = exFor(m.email); if (!ex) return null;
+        const text = `${m.subject} ${m.snippet}`;
+        const kind = kindOf(m.subject) !== 'other' ? kindOf(m.subject) : kindOf(text);
+        const [amount, currency] = kind === 'payment' ? amountOf(text) : [null, null];
+        return { ...m, source: 'gmail', exchange: ex.key, kind, amount, currency };
+      }).filter(Boolean).sort((a, b) => b.ts - a.ts);
+      exCache = { t: Date.now(), data: { gmail: true, items } };
+      return exCache.data;
+    },
+    // Лента FL.ru: её раз в 30 минут собирает робот GitHub (файл fl.json рядом с приложением)
+    fl_projects: async (keywords = '') => {
+      try {
+        const r = await fetch('fl.json?t=' + Math.floor(Date.now() / 300000));
+        if (!r.ok) throw 0;
+        let items = (await r.json()).items || [];
+        const words = keywords.split(/[,;\n]/).map((w) => w.trim().toLowerCase()).filter(Boolean);
+        if (words.length) items = items.filter((i) => words.some((w) => `${i.title} ${i.category} ${i.desc}`.toLowerCase().includes(w)));
+        return { ok: true, items: items.slice(0, 30) };
+      } catch { return { ok: false, items: [] }; }
+    },
+
+    cloud_status: async () => {
+      if (!tokenValid()) return { ready: false, connected: everConnected() };
+      if (!hasScope('drive.appdata')) return { ready: false, connected: true, needScope: true };
+      try { const f = await findFile(); return { ready: true, last: f?.modifiedTime, size: f ? +f.size : 0 }; }
+      catch (e) { return { ready: false, error: e.message }; }
+    },
+    cloud_backup: async () => { try { return await upload(localStorage.getItem(KEY) || '{}', false); } catch (e) { return { ok: false, error: e.message }; } },
+    cloud_restore: async () => {
+      try {
+        const f = await findFile(); if (!f) return { ok: false, error: 'На Google Диске ещё нет резервной копии' };
+        const r = await gfetch(`${FILES}/${f.id}?alt=media`); if (!r.ok) return { ok: false, error: await explain(r) };
+        const data = await r.text(); JSON.parse(data);
+        localStorage.setItem(KEY + '.before-restore', localStorage.getItem(KEY) || '');
+        return { ok: true, data, last: f.modifiedTime };
+      } catch (e) { return { ok: false, error: e.message }; }
+    },
+    cloud_peek: async (since = '') => {
+      if (pending() || busy || !tokenValid() || !hasScope('drive.appdata')) return { ok: true, same: true, busy: true };
+      try {
+        const f = await findFile(); if (!f) return { ok: true, none: true };
+        if (since && f.modifiedTime === since) return { ok: true, same: true, last: since };
+        const r = await gfetch(`${FILES}/${f.id}?alt=media`); if (!r.ok) return { ok: false };
+        return { ok: true, data: await r.text(), last: f.modifiedTime };
+      } catch { return { ok: false }; }
+    },
+    cloud_sync_state: async () => ({
+      pending: pendingData !== null || (pending() && tokenValid()), busy, drive: everConnected() && (hasScope('drive.appdata') || !tokenValid()),
+      ok: last?.ok, skipped: last?.skipped, error: last?.error || (!tokenValid() && pending() ? 'ждёт входа в Google' : null), at: last?.at,
+    }),
+    exchanges_list: async () => EXCHANGES,
+  };
+
+  window.pywebview = { api, mobile: true };
+  document.documentElement.classList.add('is-mobile-app');
+
+  // Открыли приложение после перерыва: продлить вход и отправить то, что не успело уйти
+  if (!renewIfNeeded() && tokenValid() && localStorage.getItem(KEY + '.unsent') === '1') setTimeout(push, 1500);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { if (pendingData !== null) push(); return; }
+    renewIfNeeded();
+  });
+
+  // Работа без интернета и установка на экран телефона
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+})();

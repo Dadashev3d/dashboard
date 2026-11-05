@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Мой дашборд</title>
+<link rel="stylesheet" href="style.css">
+<meta name="theme-color" content="#171412">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+</head>
+<body>
+<aside class="sidebar">
+  <div class="profile">
+    <div class="avatar" id="avatar">?</div>
+    <div class="profile-name" id="profileName">Гость</div>
+  </div>
+  <nav>
+    <button data-view="overview" class="active">Главная</button>
+    <button data-view="calendar">Календарь</button>
+    <button data-view="tasks">Задачи</button>
+    <button data-view="projects">Проекты</button>
+    <button data-view="exchanges">Биржи</button>
+    <button data-view="notes">Заметки</button>
+    <button data-view="habits">Привычки</button>
+    <button data-view="finance">Финансы</button>
+    <button data-view="show">Шоу</button>
+    <button data-view="analytics">Аналитика</button>
+    <button data-view="world">Погода и сервисы</button>
+    <button data-view="settings">Настройки</button>
+  </nav>
+  <div class="quote" id="quote"></div>
+</aside>
+<div id="menuShade" class="menu-shade"></div>
+
+<main>
+  <!-- Верхняя панель: поиск и уведомления -->
+  <div class="topbar">
+    <button id="menuBtn" class="ghost menu-btn" title="Меню">☰</button>
+    <div class="search">
+      <input id="searchInput" placeholder="Поиск по задачам, заметкам, событиям…" autocomplete="off">
+      <div id="searchResults" class="dropdown"></div>
+    </div>
+    <button id="dayNightBtn" class="ghost daynight" title="День / ночь">🌙</button>
+    <button id="syncBtn" class="ghost sync" title="Сохранение в Google">☁️<span id="syncMark"></span></button>
+    <div class="bell-wrap">
+      <button id="bellBtn" class="ghost bell">🔔<span id="bellCount" class="bell-count"></span></button>
+      <div id="bellList" class="dropdown right"></div>
+    </div>
+  </div>
+
+  <!-- ГЛАВНАЯ -->
+  <section id="view-overview" class="view active">
+    <header class="hero">
+      <div>
+        <p id="todayLabel" class="muted"></p>
+        <h1 id="greeting">Привет!</h1>
+        <p id="daySub" class="muted"></p>
+      </div>
+      <button id="focusBtn" class="focus-btn">◎ <span>Фокус<br>на главное</span> ›</button>
+    </header>
+
+    <div class="grid">
+      <div class="card">
+        <div class="card-head"><h3>Сегодня в календаре</h3><a class="link" data-go="calendar">Открыть →</a></div>
+        <ul id="ovToday" class="timeline"></ul>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Мои приоритеты</h3><a class="link" id="addPrioBtn">+ Добавить</a></div>
+        <form id="prioForm" class="row-form compact hidden"><input id="prioText" placeholder="Важное дело" required><button>OK</button></form>
+        <ul id="ovPrio" class="list"></ul>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>⏳ Ближайшие задачи</h3><a class="link" data-go="tasks">Все задачи →</a></div>
+        <ul id="ovUpcoming" class="list"></ul>
+      </div>
+      <div class="card mail-card">
+        <div class="card-head"><h3>Непрочитанные письма</h3><a class="link" id="mailRefresh" title="Обновить">⟳</a></div>
+        <ul id="ovMail" class="list mail-list"></ul>
+        <div id="mailAll" class="row-form hidden"></div>
+      </div>
+      <div class="card" id="ovExCard">
+        <div class="card-head"><h3>Биржи</h3><a class="link" data-go="exchanges">Открыть →</a></div>
+        <div id="ovExchanges"></div>
+      </div>
+    </div>
+
+    <div class="grid small">
+      <div class="card" data-go="world"><h3>Погода</h3><div id="ovWeather" class="big muted">—</div></div>
+      <div class="card" data-go="habits"><h3>Привычки сегодня</h3><div id="ovHabits"></div></div>
+      <div class="card" data-go="finance"><h3>Баланс за месяц</h3><div id="ovFinance"></div></div>
+      <div class="card" data-go="show"><h3>Шоу: расходы</h3><div id="ovShow"></div></div>
+      <div class="card" data-go="projects"><h3>Проекты</h3><div id="ovProjects"></div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3>Мои сервисы</h3><a class="link" data-go="world">+ Добавить сервис</a></div>
+      <div id="ovServices" class="services"></div>
+    </div>
+  </section>
+
+  <!-- ЗАДАЧИ -->
+  <section id="view-tasks" class="view">
+    <header class="page-head"><h1>Задачи</h1></header>
+    <form id="taskForm" class="row-form">
+      <input id="taskText" placeholder="Что нужно сделать?" required>
+      <input id="taskDue" type="date">
+      <select id="taskProject"></select>
+      <label class="check"><input type="checkbox" id="taskPrio"> ★ Приоритет</label>
+      <button>Добавить</button>
+    </form>
+    <div class="tabs" id="taskFilter">
+      <button data-f="active" class="active">Активные</button>
+      <button data-f="prio">★ Приоритетные</button>
+      <button data-f="done">Выполненные</button>
+      <button data-f="all">Все</button>
+    </div>
+    <ul id="taskList" class="list"></ul>
+  </section>
+
+  <!-- ПРОЕКТЫ -->
+  <section id="view-projects" class="view">
+    <header class="page-head"><h1>Проекты</h1><p class="muted">Группируйте задачи по проектам и следите за прогрессом</p></header>
+    <form id="projectForm" class="row-form">
+      <input id="projectName" placeholder="Название проекта" required>
+      <input id="projectColor" type="color" value="#2f6b4f">
+      <button>Создать</button>
+    </form>
+    <div id="projectList" class="grid"></div>
+  </section>
+
+  <!-- БИРЖИ -->
+  <section id="view-exchanges" class="view">
+    <header class="page-head">
+      <h1>Биржи</h1>
+      <p class="muted">Заказы, сообщения и оплаты — из писем бирж в Gmail</p>
+      <button id="exRefresh" class="ghost" style="margin-left:auto">⟳ Обновить</button>
+    </header>
+    <div id="exNotice"></div>
+    <div id="exCards" class="grid small"></div>
+    <div class="ex-layout">
+      <div class="card">
+        <div class="card-head"><h3>Письма с бирж (30 дней)</h3></div>
+        <div class="tabs" id="exFilter">
+          <button data-f="all" class="active">Все</button>
+          <button data-f="order">Заказы</button>
+          <button data-f="message">Сообщения</button>
+          <button data-f="payment">Оплаты</button>
+        </div>
+        <select id="exSelect"></select>
+        <ul id="exFeed" class="list mail-list"></ul>
+      </div>
+      <div class="card" id="flCard">
+        <div class="card-head"><h3>Новые проекты на FL.ru</h3></div>
+        <form id="flForm" class="row-form compact">
+          <input id="flKeywords" placeholder="Ключевые слова через запятую: arduino, 3d, печатная плата">
+          <button>Фильтр</button>
+        </form>
+        <ul id="flList" class="list"></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ОТКЛИКИ UPWORK: агент готовит, вы отправляете -->
+
+  <!-- ЗАМЕТКИ -->
+  <section id="view-notes" class="view">
+    <header class="page-head"><h1>Заметки</h1><button id="newNoteBtn">+ Новая заметка</button></header>
+    <div class="notes-layout">
+      <div class="card"><ul id="noteList" class="list"></ul></div>
+      <div class="card">
+        <input id="noteTitle" class="note-title" placeholder="Заголовок">
+        <textarea id="noteBody" rows="16" placeholder="Текст заметки… (сохраняется автоматически)"></textarea>
+        <div class="row-end"><span id="noteSaved" class="muted"></span><button id="delNoteBtn" class="ghost">Удалить</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ПРИВЫЧКИ -->
+  <section id="view-habits" class="view">
+    <header class="page-head"><h1>Привычки</h1><p class="muted">Отмечайте выполненные дни, нажимая на клетку</p></header>
+    <form id="habitForm" class="row-form">
+      <input id="habitName" placeholder="Новая привычка, например «Зарядка»" required>
+      <button>Добавить</button>
+    </form>
+    <div class="card"><table id="habitTable" class="habit-table"></table></div>
+  </section>
+
+  <!-- ФИНАНСЫ -->
+  <section id="view-finance" class="view">
+    <header class="page-head">
+      <h1>Финансы</h1>
+      <div class="month-switch">
+        <button id="finPrev" class="ghost">‹</button><span id="finMonth"></span><button id="finNext" class="ghost">›</button>
+      </div>
+    </header>
+    <form id="txForm" class="row-form">
+      <select id="txType"><option value="out">Расход</option><option value="in">Доход</option></select>
+      <input id="txAmount" type="number" step="0.01" min="0" placeholder="Сумма" required>
+      <select id="txCur" title="Валюта"><option value="RUB">₽ рубли</option><option value="USD">$ доллары</option><option value="EUR">€ евро</option><option value="AZN">₼ манаты</option></select>
+      <input id="txCat" list="catList" placeholder="Категория" required>
+      <datalist id="catList"></datalist>
+      <input id="txDate" type="date" required>
+      <input id="txNote" placeholder="Комментарий">
+      <button>Добавить</button>
+    </form>
+    <div class="grid">
+      <div class="card"><h3>Итоги месяца</h3><div id="finSummary"></div></div>
+      <div class="card"><h3>Расходы по категориям</h3><div id="finCats"></div></div>
+    </div>
+    <div class="card"><h3>Операции</h3><ul id="txList" class="list"></ul></div>
+  </section>
+
+  <!-- ШОУ: расходы на светодиодное шоу -->
+  <section id="view-show" class="view">
+    <header class="page-head">
+      <h1>Светодиодное шоу</h1>
+      <p class="muted">Сколько уходит на программиста, агентов, материалы и всё остальное</p>
+      <div class="month-switch" style="margin-left:auto">
+        <button id="shPrev" class="ghost">‹</button><span id="shMonth"></span><button id="shNext" class="ghost">›</button>
+      </div>
+    </header>
+
+    <div class="sh-viewbar">
+      <span class="muted">Показывать суммы:</span>
+      <div class="sh-pick" id="shView">
+        <button type="button" class="sh-chip" data-v="orig">Как записано</button>
+        <button type="button" class="sh-chip" data-v="RUB">₽ в рублях</button>
+        <button type="button" class="sh-chip" data-v="USD">$ в долларах</button>
+        <button type="button" class="sh-chip" data-v="EUR">€ в евро</button>
+        <button type="button" class="sh-chip" data-v="AZN">₼ в манатах</button>
+      </div>
+    </div>
+
+    <div id="shCats" class="sh-cats"></div>
+
+    <form id="shForm" class="card sh-form">
+      <div class="sh-pick" id="shPick"></div>
+      <div class="row-form">
+        <input id="shAmount" type="number" step="0.01" min="0" placeholder="Сумма" required>
+        <select id="shCur" title="Валюта"><option value="RUB">₽ рубли</option><option value="USD">$ доллары</option><option value="EUR">€ евро</option><option value="AZN">₼ манаты</option></select>
+        <input id="shWho" list="shWhoList" placeholder="Кому / где купил">
+        <datalist id="shWhoList"></datalist>
+        <input id="shDate" type="date" required>
+        <input id="shNote" placeholder="За что (например, «прошивка контроллера», «лента WS2812 10 м»)">
+        <button>Записать расход</button>
+      </div>
+    </form>
+
+    <div class="grid">
+      <div class="card"><h3 id="shSumTitle">Итоги</h3><div id="shSummary"></div></div>
+      <div class="card"><h3>По категориям</h3><div id="shBars"></div></div>
+      <div class="card">
+        <h3>Бюджет шоу</h3>
+        <div id="shBudget"></div>
+        <form id="shBudgetForm" class="row-form compact">
+          <input id="shBudgetInput" type="number" min="0" step="1" placeholder="Общий бюджет">
+          <select id="shBudgetCur" title="Валюта бюджета"><option value="RUB">₽</option><option value="USD">$</option><option value="EUR">€</option><option value="AZN">₼</option></select>
+          <button>Сохранить</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h3>Расходы</h3>
+        <div class="tabs" id="shPeriod">
+          <button data-p="month" class="active">За месяц</button>
+          <button data-p="all">За всё время</button>
+        </div>
+      </div>
+      <div class="tabs" id="shFilter"></div>
+      <ul id="shList" class="list"></ul>
+      <form id="shCatForm" class="row-form compact">
+        <input id="shCatIcon" placeholder="🎛" maxlength="4" style="max-width:70px">
+        <input id="shCatName" placeholder="Новая категория, например «Аренда площадки»" required>
+        <button class="ghost">+ Категория</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- КАЛЕНДАРЬ -->
+  <section id="view-calendar" class="view">
+    <header class="page-head">
+      <h1>Календарь</h1>
+      <div class="month-switch">
+        <button id="calPrev" class="ghost">‹</button><span id="calMonth"></span><button id="calNext" class="ghost">›</button>
+      </div>
+    </header>
+    <div class="cal-layout">
+      <div class="card"><div id="calGrid" class="cal-grid"></div></div>
+      <div class="card">
+        <h3 id="calDayLabel"></h3>
+        <form id="eventForm" class="col-form">
+          <input id="evTitle" placeholder="Событие" required>
+          <input id="evTime" type="time">
+          <button>Добавить</button>
+        </form>
+        <ul id="dayEvents" class="list"></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- АНАЛИТИКА -->
+  <section id="view-analytics" class="view">
+    <header class="page-head"><h1>Аналитика</h1><p class="muted">Как у вас идут дела</p></header>
+    <div class="grid small" id="anStats"></div>
+    <div class="grid">
+      <div class="card"><h3>Выполнено задач за 7 дней</h3><div id="anTasks" class="vbars"></div></div>
+      <div class="card"><h3>Привычки за 7 дней</h3><div id="anHabits"></div></div>
+      <div class="card"><h3>Расходы за 6 месяцев</h3><div id="anMoney" class="vbars"></div></div>
+    </div>
+  </section>
+
+  <!-- АГЕНТЫ -->
+
+  <!-- ПОГОДА И СЕРВИСЫ -->
+  <section id="view-world" class="view">
+    <header class="page-head"><h1>Погода и сервисы</h1></header>
+    <div class="card">
+      <form id="cityForm" class="row-form">
+        <input id="cityInput" placeholder="Ваш город, например Москва" required>
+        <button>Показать погоду</button>
+      </form>
+      <div id="weatherNow"></div>
+      <div id="weatherDays" class="days"></div>
+    </div>
+    <div class="card">
+      <h3>Мои сервисы и сайты</h3>
+      <p class="muted">Почта, календарь, новости — всё, что открываете каждый день. Плитки появятся на главной.</p>
+      <form id="linkForm" class="row-form">
+        <input id="linkIcon" placeholder="Значок" maxlength="2" style="width:80px;flex:0">
+        <input id="linkTitle" placeholder="Название" required>
+        <input id="linkUrl" type="url" placeholder="https://..." required>
+        <button>Добавить</button>
+      </form>
+      <div id="linkList" class="links"></div>
+    </div>
+  </section>
+
+  <!-- НАСТРОЙКИ -->
+  <section id="view-settings" class="view">
+    <header class="page-head"><h1>Настройки</h1></header>
+    <div class="card">
+      <h3>Профиль</h3>
+      <form id="profileForm" class="row-form">
+        <input id="nameInput" placeholder="Как к вам обращаться?" required>
+        <button>Сохранить</button>
+      </form>
+    </div>
+    <div class="card">
+      <h3>Оформление</h3>
+      <p class="theme-sub">Режим</p>
+      <div class="mode-pick" id="modePick">
+        <button type="button" data-mode="day">☀️ День</button>
+        <button type="button" data-mode="night">🌙 Ночь</button>
+        <button type="button" data-mode="auto">🕐 Авто — по часам</button>
+      </div>
+      <p class="muted small" id="modeHint"></p>
+      <p class="theme-sub">Или тема</p>
+      <div class="theme-pick">
+        <button class="theme-opt" data-theme="paper">
+          <span class="theme-swatch"><span style="background:#efe9dd"></span><span style="background:#1f1b16"></span><span style="background:#d4541f"></span><span style="background:#2f6b4f"></span></span>
+          Бумага — светлая
+        </button>
+        <button class="theme-opt" data-theme="dark">
+          <span class="theme-swatch"><span style="background:#171412"></span><span style="background:#2c2722"></span><span style="background:#ef7a41"></span><span style="background:#6fb08b"></span></span>
+          Уголь — тёмная
+        </button>
+        <button class="theme-opt" data-theme="ocean">
+          <span class="theme-swatch"><span style="background:#0d1922"></span><span style="background:#1b2f3e"></span><span style="background:#23b5c2"></span><span style="background:#5cc89b"></span></span>
+          Океан — тёмная
+        </button>
+        <button class="theme-opt" data-theme="lavender">
+          <span class="theme-swatch"><span style="background:#ebe7f3"></span><span style="background:#2a2140"></span><span style="background:#7a4fd4"></span><span style="background:#2d7a5f"></span></span>
+          Лаванда — светлая
+        </button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Мои биржи</h3>
+      <p class="muted small">Отметьте биржи фриланса, которыми пользуетесь — дашборд будет показывать заказы, сообщения и оплаты из их писем в Gmail. Если не пользуетесь ни одной, оставьте всё пустым — раздел «Биржи» скроется.</p>
+      <div id="exUsePick" class="ex-use-pick"></div>
+    </div>
+    <div class="card" id="gmailCard">
+      <h3>Почта Gmail</h3>
+      <div id="gmailState" class="gmail-state"></div>
+      <details id="gmailHelp">
+        <summary>Как получить файл ключа (один раз, ~5 минут)</summary>
+        <ol class="steps">
+          <li>Откройте <a class="ext" href="https://console.cloud.google.com/projectcreate">console.cloud.google.com</a> под своим Google-аккаунтом и создайте проект, например «Мой дашборд».</li>
+          <li>Включите Gmail API: <a class="ext" href="https://console.cloud.google.com/apis/library/gmail.googleapis.com">страница Gmail API</a> → «Включить».</li>
+          <li>Настройте экран согласия: <a class="ext" href="https://console.cloud.google.com/auth/branding">Google Auth Platform</a> → «Начать». Название — любое, тип — <b>Внешний (External)</b>, почта — ваша.</li>
+          <li>В разделе <a class="ext" href="https://console.cloud.google.com/auth/audience">Аудитория</a> добавьте свою почту в <b>тестовые пользователи</b>.</li>
+          <li>В разделе <a class="ext" href="https://console.cloud.google.com/auth/clients">Клиенты</a> → «Создать клиента» → тип <b>Приложение для ПК</b> → «Создать» → <b>Скачать JSON</b>.</li>
+          <li>Вернитесь сюда, нажмите «Выбрать файл ключа» и укажите скачанный файл. Затем «Войти через Google».</li>
+        </ol>
+        <p class="muted small">Дашборд получает доступ только на чтение писем. Ключ и вход хранятся у вас на компьютере. Пока приложение в режиме «тестирования», Google просит входить заново примерно раз в 7 дней.</p>
+      </details>
+    </div>
+    <div class="card" id="cloudCard">
+      <h3>☁️ Резервная копия в Google</h3>
+      <p class="muted small">Все записи (задачи, финансы, расходы шоу, заметки…) сами копируются в скрытую папку вашего Google Диска — через несколько секунд после каждого изменения (значок ☁️ вверху показывает, что всё сохранено). Если программа удалится или сломается компьютер: установите дашборд, подключите тот же Gmail — и нажмите «Восстановить».</p>
+      <div id="cloudState"></div>
+    </div>
+    <div class="card">
+      <h3>Данные</h3>
+      <div class="row-form">
+        <button id="exportBtn" class="ghost">Сохранить копию в файл</button>
+        <label class="ghost file-btn">Загрузить из копии<input type="file" id="importInput" accept=".json" hidden></label>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Режим фокуса -->
+<div id="focusOverlay" class="overlay hidden">
+  <div class="focus-box">
+    <p class="muted">Сейчас главное:</p>
+    <h2 id="focusTask"></h2>
+    <div id="focusTimer" class="timer">25:00</div>
+    <div class="row-form center">
+      <button id="focusStart">▶ Старт</button>
+      <button id="focusDone" class="ghost">✓ Сделано</button>
+      <button id="focusSkip" class="ghost">Следующая</button>
+      <button id="focusClose" class="ghost">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
