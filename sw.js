@@ -1,6 +1,6 @@
 // Сервис-воркер: приложение открывается и без интернета (данные хранятся на телефоне),
 // а при наличии сети всегда берёт свежую версию файлов.
-const CACHE = 'mydashboard-v3';
+const CACHE = 'mydashboard-v4';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'api.js', 'config.js', 'manifest.json', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting())); });
