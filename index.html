@@ -4,12 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Мой дашборд</title>
-<link rel="stylesheet" href="style.css?v=20261107005702">
+<link rel="stylesheet" href="style.css?v=20261107010917">
 <meta name="theme-color" content="#171412">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<style>html,body{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100%}main{overflow-x:clip}body{-webkit-tap-highlight-color:transparent}</style>
+<style>html,body{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100%}html{overscroll-behavior-y:none}main{overflow-x:clip}body{-webkit-tap-highlight-color:transparent}</style>
 <script>(function(){var o={passive:false};function multi(e){if(e.touches&&e.touches.length>1)e.preventDefault();}document.addEventListener("touchstart",multi,o);document.addEventListener("touchmove",function(e){multi(e);if(e.scale&&e.scale!==1)e.preventDefault();},o);["gesturestart","gesturechange"].forEach(function(n){document.addEventListener(n,function(e){e.preventDefault();},o);});})();</script>
 </head>
 <body>
@@ -44,6 +44,7 @@
       <input id="searchInput" placeholder="Поиск по задачам, заметкам, событиям…" autocomplete="off">
       <div id="searchResults" class="dropdown"></div>
     </div>
+    <button id="focusChip" class="ghost focus-chip hidden" title="Таймер фокуса — открыть">⏱ <span id="focusChipTime">25:00</span></button>
     <button id="dayNightBtn" class="ghost daynight" title="День / ночь">🌙</button>
     <button id="syncBtn" class="ghost sync" title="Сохранение в Google">☁️<span id="syncMark"></span></button>
     <div class="bell-wrap">
@@ -426,14 +427,16 @@
       <button id="focusStart">▶ Старт</button>
       <button id="focusDone" class="ghost">✓ Сделано</button>
       <button id="focusSkip" class="ghost">Следующая</button>
+      <button id="focusReset" class="ghost">↺ Сбросить</button>
       <button id="focusClose" class="ghost">Закрыть</button>
     </div>
+    <p id="focusHint" class="muted small focus-hint"></p>
   </div>
 </div>
 
-<script>window.APP_BUILD="07.11.2026 00:57";</script>
-<script src="config.js?v=20261107005702"></script>
-<script src="api.js?v=20261107005702"></script>
-<script src="app.js?v=20261107005702"></script>
+<script>window.APP_BUILD="07.11.2026 01:09";</script>
+<script src="config.js?v=20261107010917"></script>
+<script src="api.js?v=20261107010917"></script>
+<script src="app.js?v=20261107010917"></script>
 </body>
 </html>

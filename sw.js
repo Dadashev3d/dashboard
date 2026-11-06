@@ -1,7 +1,7 @@
 // Сервис-воркер: приложение открывается и без интернета (данные хранятся на телефоне),
 // а при наличии сети всегда берёт свежую версию файлов — мимо кэша браузера
 // (GitHub разрешает хранить файлы 10 минут, из-за этого обновления приходили с опозданием).
-const CACHE = 'mydashboard-v7';
+const CACHE = 'mydashboard-v8';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'api.js', 'config.js', 'manifest.json', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -23,4 +23,12 @@ self.addEventListener('fetch', (e) => {
       return r;
     }).catch(() => caches.match(e.request, { ignoreSearch: true }).then((r) => r || caches.match('index.html')))
   );
+});
+// Нажатие на уведомление (таймер фокуса) — открыть приложение
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+    const w = list.find((c) => 'focus' in c);
+    return w ? w.focus() : self.clients.openWindow('./');
+  }));
 });

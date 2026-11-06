@@ -253,6 +253,22 @@
       ok: last?.ok, skipped: last?.skipped, error: last?.error || (!tokenValid() && pending() ? 'ждёт входа в Google' : null), at: last?.at,
     }),
     exchanges_list: async () => EXCHANGES,
+    // Уведомление Android (таймер фокуса). opts: tag, silent, sound, ask (спросить разрешение), clear (убрать)
+    notify: async (title, body, opts = {}) => {
+      try {
+        if (!('Notification' in window) || !navigator.serviceWorker) return { ok: false };
+        const reg = await navigator.serviceWorker.ready;
+        if (opts.clear) { (await reg.getNotifications({ tag: opts.tag })).forEach((n) => n.close()); return { ok: true }; }
+        if (Notification.permission === 'default' && opts.ask) await Notification.requestPermission();
+        if (opts.sound && navigator.vibrate) navigator.vibrate([300, 150, 300]);
+        if (Notification.permission !== 'granted') return { ok: false };
+        await reg.showNotification(title, {
+          body, tag: opts.tag, renotify: !opts.silent, silent: !!opts.silent,
+          icon: 'icon-192.png', badge: 'icon-192.png', vibrate: opts.sound ? [300, 150, 300] : undefined,
+        });
+        return { ok: true };
+      } catch { return { ok: false }; }
+    },
   };
 
   window.pywebview = { api, mobile: true };

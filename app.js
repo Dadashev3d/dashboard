@@ -878,7 +878,19 @@ document.addEventListener('click', (e) => {
 });
 
 // ===== Фокус на главное =====
-let focusList = [], focusIdx = 0, focusLeft = 25 * 60, focusInt = null;
+// Таймер хранится на этом устройстве (время окончания), поэтому идёт и при закрытом окне,
+// и после перезапуска приложения. Пока идёт — виден вверху (⏱ 18:42).
+const FOCUS_LEN = 25 * 60, FOCUS_KEY = 'focus.timer';
+let focusList = [], focusIdx = 0, focusTick = null;
+const fState = () => { try { return JSON.parse(localStorage.getItem(FOCUS_KEY)) || {}; } catch { return {}; } };
+const fSave = (st) => (st ? localStorage.setItem(FOCUS_KEY, JSON.stringify(st)) : localStorage.removeItem(FOCUS_KEY));
+const focusLeftNow = () => { const st = fState(); return st.end ? Math.max(0, Math.round((st.end - Date.now()) / 1000)) : (st.left ?? FOCUS_LEN); };
+const fmtMin = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+const hhmm = (ts) => new Date(ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+// Уведомление: на компьютере — звук и мигание окна, на телефоне — уведомление Android
+function notifyUser(title, body, opts = {}) {
+  try { window.pywebview?.api?.notify?.(title, body, opts); } catch { /* нет — не страшно */ }
+}
 function focusCandidates() {
   const t = today();
   const score = (x) => (x.prio ? 0 : 2) + (x.due && x.due <= t ? 0 : 1);
@@ -889,23 +901,64 @@ function showFocus() {
   $('#focusTask').textContent = task ? task.text : 'Все задачи выполнены — можно отдохнуть 🎉';
   $('#focusDone').style.display = $('#focusSkip').style.display = task ? '' : 'none';
 }
-function stopTimer() { clearInterval(focusInt); focusInt = null; $('#focusStart').textContent = '▶ Старт'; }
-const drawTimer = () => { $('#focusTimer').textContent = `${String(Math.floor(focusLeft / 60)).padStart(2, '0')}:${String(focusLeft % 60).padStart(2, '0')}`; };
-$('#focusBtn').onclick = () => {
-  focusList = focusCandidates(); focusIdx = 0; focusLeft = 25 * 60; drawTimer(); showFocus();
+function drawTimer() {
+  const st = fState(), left = focusLeftNow(), running = !!st.end, paused = !running && st.left != null;
+  $('#focusTimer').textContent = fmtMin(left);
+  $('#focusStart').textContent = running ? '⏸ Пауза' : paused ? '▶ Продолжить' : '▶ Старт';
+  $('#focusReset').style.display = running || paused ? '' : 'none';
+  $('#focusHint').textContent = running ? `Закончится в ${hhmm(st.end)}. Окно можно закрыть — таймер продолжит идти, он виден вверху ⏱`
+    : paused ? 'Таймер на паузе' : '';
+  const chip = $('#focusChip');
+  chip.classList.toggle('hidden', !running && !paused);
+  chip.classList.toggle('paused', paused);
+  $('#focusChipTime').textContent = fmtMin(left);
+}
+function focusFinished() {
+  const st = fState();
+  clearInterval(focusTick); focusTick = null; fSave(null); drawTimer();
+  const late = Date.now() - st.end > 90 * 1000; // приложение было закрыто, когда время вышло
+  const text = late ? `Таймер фокуса закончился в ${hhmm(st.end)}.` : '25 минут прошло! Сделайте перерыв 5 минут.';
+  if (!late) notifyUser('⏱ 25 минут прошло', 'Сделайте перерыв 5 минут.', { tag: 'focus', sound: true });
+  else notifyUser('', '', { tag: 'focus', clear: true });
+  setTimeout(() => alert(text), 50);
+}
+function focusLoop() {
+  clearInterval(focusTick); focusTick = null;
+  const st = fState();
+  if (st.end && st.end <= Date.now()) { focusFinished(); return; }
+  if (st.end) focusTick = setInterval(() => { const e = fState().end; if (e && e <= Date.now()) focusFinished(); else drawTimer(); }, 1000);
+  drawTimer();
+}
+const focusTaskText = () => (focusList[focusIdx] ? focusList[focusIdx].text : '');
+function openFocus() {
+  focusList = focusCandidates();
+  const want = fState().task;
+  const i = want ? focusList.findIndex((x) => x.text === want) : -1;
+  focusIdx = i >= 0 ? i : 0;
+  showFocus(); drawTimer();
   $('#focusOverlay').classList.remove('hidden');
-};
+}
+$('#focusBtn').onclick = openFocus;
+$('#focusChip').onclick = openFocus;
 $('#focusStart').onclick = () => {
-  if (focusInt) { stopTimer(); return; }
-  $('#focusStart').textContent = '⏸ Пауза';
-  focusInt = setInterval(() => {
-    focusLeft--; drawTimer();
-    if (focusLeft <= 0) { stopTimer(); focusLeft = 25 * 60; alert('25 минут прошло! Сделайте перерыв 5 минут.'); drawTimer(); }
-  }, 1000);
+  const st = fState();
+  if (st.end) { // пауза
+    fSave({ left: focusLeftNow(), task: st.task });
+    notifyUser('', '', { tag: 'focus', clear: true });
+  } else {
+    const end = Date.now() + (st.left ?? FOCUS_LEN) * 1000;
+    fSave({ end, task: focusTaskText() });
+    notifyUser(`⏱ Фокус до ${hhmm(end)}`, focusTaskText() || 'Работайте без отвлечений', { tag: 'focus', silent: true, ask: true });
+  }
+  focusLoop();
 };
-$('#focusDone').onclick = () => { const x = focusList[focusIdx]; if (x) toggleTask(x); focusList = focusCandidates(); focusIdx = 0; showFocus(); };
-$('#focusSkip').onclick = () => { focusIdx = (focusIdx + 1) % Math.max(1, focusList.length); showFocus(); };
-$('#focusClose').onclick = () => { stopTimer(); $('#focusOverlay').classList.add('hidden'); };
+$('#focusReset').onclick = () => { fSave(null); notifyUser('', '', { tag: 'focus', clear: true }); focusLoop(); };
+$('#focusDone').onclick = () => { const x = focusList[focusIdx]; if (x) toggleTask(x); focusList = focusCandidates(); focusIdx = 0; showFocus(); const st = fState(); if (st.end || st.left != null) fSave({ ...st, task: focusTaskText() }); };
+$('#focusSkip').onclick = () => { focusIdx = (focusIdx + 1) % Math.max(1, focusList.length); showFocus(); const st = fState(); if (st.end || st.left != null) fSave({ ...st, task: focusTaskText() }); };
+$('#focusClose').onclick = () => $('#focusOverlay').classList.add('hidden');
+// При возврате в приложение — сразу проверить, не вышло ли время
+document.addEventListener('visibilitychange', () => { if (!document.hidden) focusLoop(); });
+focusLoop();
 
 // ===== Почта Gmail =====
 const openUrl = (u) => API() ? API().open_url(u) : window.open(u, '_blank', 'noopener');
