@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Мой дашборд — личный органайзер</title>
+<meta name="description" content="Мой дашборд — бесплатный личный органайзер: задачи, календарь, финансы, заметки, привычки и почта в одном месте.">
+<link rel="icon" href="icon-192.png">
+<style>
+  body { margin: 0; font: 16px/1.6 system-ui, "Segoe UI", sans-serif; background: #f4efe6; color: #1d1915; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 32px 20px 48px; }
+  header { display: flex; align-items: center; gap: 14px; }
+  header img { width: 56px; height: 56px; border-radius: 12px; }
+  h1 { margin: 0; font-size: 30px; }
+  h2 { margin-top: 30px; font-size: 20px; }
+  .lead { font-size: 18px; color: #4a4038; }
+  .btns { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0; }
+  .btn { display: inline-block; padding: 12px 18px; border-radius: 8px; border: 2px solid #1d1915; color: #1d1915; text-decoration: none; font-weight: 600; }
+  .btn.main { background: #d4572a; border-color: #d4572a; color: #fff; }
+  ul { padding-left: 20px; }
+  footer { margin-top: 40px; font-size: 14px; color: #6b6058; }
+  footer a { color: #6b6058; }
+  hr { border: 0; border-top: 1px solid #d8cfc2; margin: 34px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><img src="icon-192.png" alt=""><h1>Мой дашборд</h1></header>
+  <p class="lead">Бесплатный личный органайзер: задачи, календарь, проекты, финансы, заметки, привычки и непрочитанная почта — на одном экране. Работает на телефоне Android и на компьютере с Windows.</p>
+  <div class="btns">
+    <a class="btn main" href="./">Открыть приложение</a>
+    <a class="btn" href="dashboard.apk">Скачать для Android (APK)</a>
+    <a class="btn" href="privacy.html">Политика конфиденциальности</a>
+  </div>
+
+  <h2>Что умеет</h2>
+  <ul>
+    <li>Задачи со сроками и приоритетами, календарь, проекты и заметки.</li>
+    <li>Учёт доходов и расходов, привычки, режим фокуса с таймером.</li>
+    <li>Автоматическая резервная копия в вашем Google Диске: данные возвращаются на новом телефоне или компьютере после входа через Google.</li>
+    <li>По желанию — непрочитанные письма Gmail и уведомления с бирж фриланса прямо в дашборде (только чтение).</li>
+  </ul>
+
+  <h2>Как используются данные Google</h2>
+  <ul>
+    <li><b>Вход через Google</b> — чтобы узнать адрес вашей почты и показать, под каким аккаунтом вы вошли.</li>
+    <li><b>Google Диск (только папка приложения)</b> — чтобы хранить резервную копию ваших записей в скрытой папке, которую видит только это приложение. Остальные файлы на Диске приложению недоступны.</li>
+    <li><b>Gmail (только чтение, по желанию)</b> — чтобы показать непрочитанные письма и письма от бирж фриланса. Приложение не отправляет, не изменяет и не удаляет письма.</li>
+  </ul>
+  <p>Все данные обрабатываются на вашем устройстве и в вашем аккаунте Google. У приложения нет своего сервера: разработчик не получает, не хранит и не передаёт ваши данные. Подробно — в <a href="privacy.html">политике конфиденциальности</a>.</p>
+
+  <hr>
+  <h2 lang="en">My Dashboard (English)</h2>
+  <p lang="en">A free personal organizer: tasks, calendar, projects, finances, notes, habits and unread email on one screen, for Android and Windows.</p>
+  <ul lang="en">
+    <li><b>Google Sign-In</b> — to show which account you are signed in with (your email address).</li>
+    <li><b>Google Drive, app data folder only</b> (<code>drive.appdata</code>) — to store an automatic backup of your own records in a hidden folder that only this app can access, so they can be restored on a new device.</li>
+    <li><b>Gmail, read-only, optional</b> (<code>gmail.readonly</code>) — to display your unread messages and notifications from freelance marketplaces inside the dashboard. The app never sends, modifies or deletes email.</li>
+  </ul>
+  <p lang="en">All data is processed on your device and in your own Google account. The app has no backend server; the developer does not receive, store or share your data. See the <a href="privacy.html">Privacy Policy</a>.</p>
+
+  <footer>© 2026 Мой дашборд · Разработчик: Руслан Дадашев · <a href="privacy.html">Политика конфиденциальности / Privacy Policy</a></footer>
+</div>
+</body>
+</html>

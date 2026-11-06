@@ -971,11 +971,26 @@ function renderGmailState(st) {
   const box = $('#gmailState');
   if (!API()) { box.innerHTML = '<p class="muted">Подключение почты работает в установленной программе «Мой дашборд».</p>'; return; }
   const err = st.error ? `<p class="neg">${esc(st.error)}</p>` : '';
+  const afterMail = (s) => { renderGmailState(s); loadMail(); loadExchanges(true); };
   if (st.connected) {
-    box.innerHTML = `<p>✅ Подключено${st.email ? `: <b>${esc(st.email)}</b>` : ''}</p>${err}<div class="row-form"><button class="ghost" id="gmOff">Отключить</button></div>`;
-    $('#gmOff').onclick = async () => { renderGmailState(await API().gmail_disconnect()); loadMail(); loadExchanges(true); };
+    const mail = st.mail
+      ? `<p>📬 Почта подключена — письма и биржи видны в дашборде.</p>
+         <div class="row-form"><button class="ghost" id="mailOff">Отключить почту</button><button class="ghost" id="gmOff">Выйти из Google</button></div>`
+      : `<p class="muted">📭 Почта не подключена. Подключите, если хотите видеть непрочитанные письма и сообщения с бирж прямо в дашборде.</p>
+         <p class="muted small">Google покажет предупреждение «Приложение не проверено» — это нормально для небольших приложений. Нажмите «Дополнительно» → «Перейти» и разрешите чтение почты. Дашборд письма только читает: не отправляет и не удаляет.</p>
+         <div class="row-form"><button id="mailOn">Подключить почту</button><button class="ghost" id="gmOff">Выйти из Google</button></div>`;
+    box.innerHTML = `<p>✅ Вход выполнен${st.email ? `: <b>${esc(st.email)}</b>` : ''}</p>${err}${mail}`;
+    $('#gmOff').onclick = async () => {
+      if (!confirm('Выйти из Google? Данные останутся в программе, но перестанут копироваться в Google.')) return;
+      afterMail(await API().gmail_disconnect()); renderCloud();
+    };
+    $('#mailOff')?.addEventListener('click', async () => afterMail(await API().mail_disconnect()));
+    $('#mailOn')?.addEventListener('click', async () => {
+      $('#mailOn').disabled = true; $('#mailOn').textContent = 'Ждём вход в браузере…';
+      afterMail(await API().mail_connect());
+    });
   } else if (st.hasClient) {
-    box.innerHTML = `<p>🔑 Ключ загружен. Осталось войти — откроется браузер со входом Google.</p>${err}
+    box.innerHTML = `<p>Войдите через Google — тогда все ваши записи будут сами сохраняться в Google и вернутся на новом телефоне или компьютере.</p>${err}
       <div class="row-form"><button id="gmIn">Войти через Google</button><button class="ghost" id="gmKey">Заменить ключ</button></div>`;
     $('#gmIn').onclick = async () => {
       $('#gmIn').disabled = true; $('#gmIn').textContent = 'Ждём вход в браузере…';
@@ -1095,7 +1110,7 @@ function renderExchanges() {
   const noMail = API() && !exData.gmail;
   $('#exNotice').innerHTML = !API()
     ? '<p class="muted">Письма с бирж загружаются в установленной программе.</p>'
-    : noMail ? '<div class="notice">Подключите Gmail в <a class="link" id="exSetup">Настройках</a> — дашборд будет брать заказы, сообщения и оплаты из писем бирж.</div>'
+    : noMail ? '<div class="notice">Подключите почту в <a class="link" id="exSetup">Настройках</a> — дашборд будет брать заказы, сообщения и оплаты из писем бирж.</div>'
     : exData.error ? '<p class="neg">Не удалось загрузить письма</p>' : '';
   if ($('#exSetup')) $('#exSetup').onclick = () => go('settings');
 
@@ -1256,7 +1271,7 @@ async function renderCloud(msg = '') {
     box.querySelector('a.ext').onclick = (e) => { e.preventDefault(); openUrl(st.enableUrl); };
     $('#clRetry').onclick = () => renderCloud();
   } else if (st.connected || st.needScope) {
-    box.innerHTML = `<p>Gmail подключён, но доступа к Google Диску для копий ещё нет. Нажмите кнопку — откроется вход Google, разрешите доступ к «данным приложения на Google Диске».</p>${note}
+    box.innerHTML = `<p>Вход в Google выполнен, но доступа к Google Диску для копий ещё нет. Нажмите кнопку — откроется вход Google, разрешите доступ к «данным приложения на Google Диске».</p>${note}
       <div class="row-form"><button id="clGrant">Разрешить резервные копии</button></div>`;
     $('#clGrant').onclick = async () => {
       $('#clGrant').disabled = true; $('#clGrant').textContent = 'Ждём вход в браузере…';
@@ -1264,7 +1279,7 @@ async function renderCloud(msg = '') {
       await renderCloud(); maybeOfferRestore();
     };
   } else {
-    box.innerHTML = `<p class="muted">Сначала подключите Gmail (карточка «Почта Gmail» выше) — копии будут храниться в этом же аккаунте Google.</p>${st.error ? `<p class="neg small">${esc(st.error)}</p>` : ''}`;
+    box.innerHTML = `<p class="muted">Сначала войдите через Google (карточка «Аккаунт Google и почта» выше) — копии будут храниться в вашем аккаунте Google.</p>${st.error ? `<p class="neg small">${esc(st.error)}</p>` : ''}`;
   }
   return st;
 }

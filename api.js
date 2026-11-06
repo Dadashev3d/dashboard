@@ -6,7 +6,12 @@
   const CFG = window.MOBILE_CONFIG || {};
   const KEY = 'dashboard.v1';
   const TOK = 'mobile.token';
-  const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/drive.appdata'];
+  // Вход — только почта-адрес и скрытая папка на Диске (обычный доступ, без предупреждений Google).
+  // Чтение Gmail — отдельно, по кнопке «Подключить почту» (у Google это «особый» доступ).
+  const BASE_SCOPES = ['openid', 'email', 'https://www.googleapis.com/auth/drive.appdata'];
+  const MAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
+  const MAIL_ON = 'mobile.mail';
+  const mailWanted = () => localStorage.getItem(MAIL_ON) === '1';
   const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me';
   const FILES = 'https://www.googleapis.com/drive/v3/files';
   const UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files';
@@ -37,7 +42,7 @@
     if (!CFG.clientId) { alert('В мобильной версии не указан ключ Google (config.js).'); return; }
     const q = new URLSearchParams({
       client_id: CFG.clientId, redirect_uri: redirectUri(), response_type: 'token',
-      scope: SCOPES.join(' '), include_granted_scopes: 'true',
+      scope: [...BASE_SCOPES, ...(mailWanted() ? [MAIL_SCOPE] : [])].join(' '), include_granted_scopes: 'true',
     });
     if (silent) q.set('prompt', 'none');
     sessionStorage.setItem('mobile.silentTry', String(Date.now()));
@@ -59,6 +64,10 @@
     return r;
   }
   const hasScope = (s) => (tok()?.scope || '').includes(s);
+  // Почта работает, если человек сам её подключил и Google выдал доступ
+  const mailOn = () => mailWanted() && hasScope('gmail.readonly');
+  // Кто подключался раньше (тогда почта входила во вход) — почта остаётся включённой
+  if (localStorage.getItem(MAIL_ON) === null && hasScope('gmail.readonly')) localStorage.setItem(MAIL_ON, '1');
 
   // ---------- Почта ----------
   function parseFrom(v = '') {
@@ -82,7 +91,12 @@
   let email = localStorage.getItem('mobile.email') || '';
   async function loadEmail() {
     if (email || !tokenValid()) return;
-    try { email = (await (await gfetch(`${GMAIL}/profile`)).json()).emailAddress || ''; localStorage.setItem('mobile.email', email); } catch {}
+    try {
+      email = hasScope('email') || hasScope('openid')
+        ? (await (await gfetch('https://openidconnect.googleapis.com/v1/userinfo')).json()).email || ''
+        : (await (await gfetch(`${GMAIL}/profile`)).json()).emailAddress || '';
+      if (email) localStorage.setItem('mobile.email', email);
+    } catch {}
   }
 
   // ---------- Биржи (то же, что exchanges.py на компьютере) ----------
@@ -183,12 +197,21 @@
     },
     import_backup: pickFile,
 
-    gmail_status: async () => { await loadEmail(); return { hasClient: !!CFG.clientId, connected: tokenValid() || everConnected(), email, drive: hasScope('drive.appdata') }; },
+    // connected — вход в Google выполнен; mail — почта подключена (отдельной кнопкой)
+    gmail_status: async () => {
+      await loadEmail();
+      return { hasClient: !!CFG.clientId, connected: tokenValid() || everConnected(), email, drive: hasScope('drive.appdata'),
+               mail: mailWanted() && (hasScope('gmail.readonly') || !tokenValid()) };
+    },
     gmail_choose_client_file: async () => api.gmail_status(),
     gmail_connect: async () => { sessionStorage.removeItem('mobile.authError'); signIn(false); return new Promise(() => {}); },
-    gmail_disconnect: async () => { localStorage.removeItem(TOK); localStorage.removeItem('mobile.email'); email = ''; return api.gmail_status(); },
+    gmail_disconnect: async () => { localStorage.removeItem(TOK); localStorage.removeItem('mobile.email'); localStorage.removeItem(MAIL_ON); email = ''; exCache = { t: 0, data: null }; return api.gmail_status(); },
+    mail_connect: async () => { localStorage.setItem(MAIL_ON, '1'); sessionStorage.removeItem('mobile.authError'); signIn(false); return new Promise(() => {}); },
+    mail_disconnect: async () => { localStorage.setItem(MAIL_ON, '0'); exCache = { t: 0, data: null }; return api.gmail_status(); },
     gmail_unread: async () => {
+      if (!mailWanted()) return { connected: false, signedIn: tokenValid() || everConnected() };
       if (!tokenValid()) return everConnected() ? { connected: true, messages: [], error: 'Вход Google истёк — откройте «Настройки» → «Войти через Google»' } : { connected: false };
+      if (!hasScope('gmail.readonly')) return { connected: false, signedIn: true };
       try {
         const total = (await (await gfetch(`${GMAIL}/labels/INBOX`)).json()).messagesUnread || 0;
         return { connected: true, total, messages: await fetchMsgs('is:unread in:inbox', 5) };
@@ -197,7 +220,9 @@
 
     exchanges_mail: async (force = false) => {
       if (!force && exCache.data && Date.now() - exCache.t < 120000) return exCache.data;
+      if (!mailWanted()) return { gmail: false, items: [] };
       if (!tokenValid()) return { gmail: everConnected(), items: [] };
+      if (!mailOn()) return { gmail: false, items: [] };
       const domains = EXCHANGES.flatMap((e) => e.domains);
       let msgs = [];
       try { msgs = await fetchMsgs(`from:(${domains.join(' OR ')}) newer_than:30d`, 40); } catch {}
@@ -292,7 +317,9 @@
     p.id = 'appVersion';
     p.className = 'muted small';
     p.style.cssText = 'text-align:center;margin:18px 0 6px';
-    p.textContent = 'Версия приложения от ' + window.APP_BUILD;
+    p.textContent = 'Версия приложения от ' + window.APP_BUILD + ' · ';
+    const a = Object.assign(document.createElement('a'), { href: 'privacy.html', textContent: 'Политика конфиденциальности', className: 'link' });
+    p.appendChild(a);
     box.appendChild(p);
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', showVersion);
