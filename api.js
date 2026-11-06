@@ -267,4 +267,18 @@
 
   // Работа без интернета и установка на экран телефона
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
+
+  // Версия внизу «Настроек» — чтобы было видно, что приложение обновилось
+  const showVersion = () => {
+    const box = document.getElementById('view-settings');
+    if (!box || !window.APP_BUILD || document.getElementById('appVersion')) return;
+    const p = document.createElement('p');
+    p.id = 'appVersion';
+    p.className = 'muted small';
+    p.style.cssText = 'text-align:center;margin:18px 0 6px';
+    p.textContent = 'Версия приложения от ' + window.APP_BUILD;
+    box.appendChild(p);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', showVersion);
+  else showVersion();
 })();
