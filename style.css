@@ -611,8 +611,12 @@ body[data-theme="lavender"] {
   .page-head { margin-bottom: 14px; }
   .page-head h1 { font-size: 26px; }
   .page-head button { margin-left: 0 !important; }
-  .grid, .grid.small, #view-overview > .grid:not(.small), #exCards { grid-template-columns: 1fr; gap: 12px; margin-bottom: 12px; }
-  #exCards { grid-template-columns: 1fr 1fr; }
+  /* minmax(0,…) и min-width:0 — иначе длинная строка (тема письма) растягивает карточку шире экрана */
+  .grid, .grid.small, #view-overview > .grid:not(.small), #exCards { grid-template-columns: minmax(0, 1fr); gap: 12px; margin-bottom: 12px; }
+  #exCards { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .grid > *, .card { min-width: 0; }
+  .mail-from, .mail-list .small, .mail-card .mail-from, .mail-card .small, #exFeed .mail-from, #exFeed .small { max-width: none; }
+  .mail-item > .muted.small { flex-shrink: 0; }
   .mail-card { grid-column: auto; }
   .card { padding: 14px; margin-bottom: 12px; }
   .row-form > * { flex: 1 1 100%; }
