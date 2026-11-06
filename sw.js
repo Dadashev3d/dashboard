@@ -1,7 +1,7 @@
 // Сервис-воркер: приложение открывается и без интернета (данные хранятся на телефоне),
 // а при наличии сети всегда берёт свежую версию файлов — мимо кэша браузера
 // (GitHub разрешает хранить файлы 10 минут, из-за этого обновления приходили с опозданием).
-const CACHE = 'mydashboard-v10';
+const CACHE = 'mydashboard-v11';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'api.js', 'config.js', 'manifest.json', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {

@@ -38,11 +38,16 @@
   function tok() { try { return JSON.parse(localStorage.getItem(TOK)); } catch { return null; } }
   const tokenValid = () => { const t = tok(); return !!(t && t.t && t.exp > Date.now()); };
   const everConnected = () => !!tok()?.ever;
+  // Вход был, но истёк и сам не продлился — нужно нажать «Войти снова»
+  const needLogin = () => !tokenValid() && everConnected();
   function signIn(silent = false) {
     if (!CFG.clientId) { alert('В мобильной версии не указан ключ Google (config.js).'); return; }
+    // Тихое продление просит ровно то, что человек уже разрешил: если попросить что-то новое,
+    // Google откажет без окна входа и почта перестанет обновляться.
+    const granted = silent ? (tok()?.scope || '').trim() : '';
     const q = new URLSearchParams({
       client_id: CFG.clientId, redirect_uri: redirectUri(), response_type: 'token',
-      scope: [...BASE_SCOPES, ...(mailWanted() ? [MAIL_SCOPE] : [])].join(' '), include_granted_scopes: 'true',
+      scope: granted || [...BASE_SCOPES, ...(mailWanted() ? [MAIL_SCOPE] : [])].join(' '), include_granted_scopes: 'true',
     });
     if (silent) q.set('prompt', 'none');
     sessionStorage.setItem('mobile.silentTry', String(Date.now()));
@@ -63,6 +68,14 @@
     if (r.status === 401) { const t = tok(); if (t) { t.exp = 0; localStorage.setItem(TOK, JSON.stringify(t)); } throw Object.assign(new Error('Вход Google истёк'), { auth: true }); }
     return r;
   }
+  // Запрос к Gmail: ошибку Google (нет доступа, выключен API) показываем словами, а не «0 писем»
+  async function gjson(url) {
+    const r = await gfetch(url);
+    if (r.ok) return r.json();
+    let msg = ''; try { msg = (await r.json()).error?.message || ''; } catch {}
+    if (r.status === 403 && /scope|insufficient|permission/i.test(msg)) throw Object.assign(new Error('Google не дал доступ к почте'), { scope: true });
+    throw new Error(/has not been used|disabled/i.test(msg) ? 'В проекте Google не включён Gmail API' : 'Gmail: ' + (msg || 'ошибка ' + r.status));
+  }
   const hasScope = (s) => (tok()?.scope || '').includes(s);
   // Почта работает, если человек сам её подключил и Google выдал доступ
   const mailOn = () => mailWanted() && hasScope('gmail.readonly');
@@ -75,10 +88,10 @@
     return m ? { name: m[1].trim(), addr: m[2].trim() } : { name: '', addr: v.trim() };
   }
   async function fetchMsgs(query, limit) {
-    const ids = await (await gfetch(`${GMAIL}/messages?` + new URLSearchParams({ q: query, maxResults: limit }))).json();
+    const ids = await gjson(`${GMAIL}/messages?` + new URLSearchParams({ q: query, maxResults: limit }));
     const list = ids.messages || [];
     return Promise.all(list.map(async (m) => {
-      const msg = await (await gfetch(`${GMAIL}/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`)).json();
+      const msg = await gjson(`${GMAIL}/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`);
       const h = {}; (msg.payload?.headers || []).forEach((x) => h[x.name.toLowerCase()] = x.value);
       const f = parseFrom(h.from);
       return {
@@ -200,7 +213,7 @@
     // connected — вход в Google выполнен; mail — почта подключена (отдельной кнопкой)
     gmail_status: async () => {
       await loadEmail();
-      return { hasClient: !!CFG.clientId, connected: tokenValid() || everConnected(), email, drive: hasScope('drive.appdata'),
+      return { hasClient: !!CFG.clientId, connected: tokenValid() || everConnected(), needLogin: needLogin(), email, drive: hasScope('drive.appdata'),
                mail: mailWanted() && (hasScope('gmail.readonly') || !tokenValid()) };
     },
     gmail_choose_client_file: async () => api.gmail_status(),
@@ -210,22 +223,27 @@
     mail_disconnect: async () => { localStorage.setItem(MAIL_ON, '0'); exCache = { t: 0, data: null }; return api.gmail_status(); },
     gmail_unread: async () => {
       if (!mailWanted()) return { connected: false, signedIn: tokenValid() || everConnected() };
-      if (!tokenValid()) return everConnected() ? { connected: true, messages: [], error: 'Вход Google истёк — откройте «Настройки» → «Войти через Google»' } : { connected: false };
+      if (!tokenValid()) return everConnected() ? { connected: true, needLogin: true, messages: [], error: 'Вход Google истёк' } : { connected: false };
       if (!hasScope('gmail.readonly')) return { connected: false, signedIn: true };
       try {
-        const total = (await (await gfetch(`${GMAIL}/labels/INBOX`)).json()).messagesUnread || 0;
+        const total = (await gjson(`${GMAIL}/labels/INBOX`)).messagesUnread || 0;
         return { connected: true, total, messages: await fetchMsgs('is:unread in:inbox', 5) };
-      } catch (e) { return { connected: true, error: e.message, messages: [] }; }
+      } catch (e) {
+        // Google забрал доступ к почте — показать «Подключить почту»
+        if (e.scope) { const t = tok(); if (t) { t.scope = t.scope.replace(MAIL_SCOPE, ''); localStorage.setItem(TOK, JSON.stringify(t)); } return { connected: false, signedIn: true }; }
+        return { connected: true, needLogin: needLogin(), error: e.message, messages: [] };
+      }
     },
 
     exchanges_mail: async (force = false) => {
       if (!force && exCache.data && Date.now() - exCache.t < 120000) return exCache.data;
       if (!mailWanted()) return { gmail: false, items: [] };
-      if (!tokenValid()) return { gmail: everConnected(), items: [] };
+      if (!tokenValid()) return { gmail: everConnected(), needLogin: needLogin(), items: [] };
       if (!mailOn()) return { gmail: false, items: [] };
       const domains = EXCHANGES.flatMap((e) => e.domains);
       let msgs = [];
-      try { msgs = await fetchMsgs(`from:(${domains.join(' OR ')}) newer_than:30d`, 40); } catch {}
+      try { msgs = await fetchMsgs(`from:(${domains.join(' OR ')}) newer_than:30d`, 40); }
+      catch (e) { return { gmail: true, needLogin: needLogin(), error: e.message, items: [] }; }
       const items = msgs.map((m) => {
         const ex = exFor(m.email); if (!ex) return null;
         const text = `${m.subject} ${m.snippet}`;

@@ -985,7 +985,11 @@ function renderGmailState(st) {
       : `<p class="muted">📭 Почта не подключена. Подключите, если хотите видеть непрочитанные письма и сообщения с бирж прямо в дашборде.</p>
          <p class="muted small">Google покажет предупреждение «Приложение не проверено» — это нормально для небольших приложений. Нажмите «Дополнительно» → «Перейти» и разрешите чтение почты. Дашборд письма только читает: не отправляет и не удаляет.</p>
          <div class="row-form"><button id="mailOn">Подключить почту</button><button class="ghost" id="gmOff">Выйти из Google</button></div>`;
-    box.innerHTML = `<p>✅ Вход выполнен${st.email ? `: <b>${esc(st.email)}</b>` : ''}</p>${err}${mail}`;
+    box.innerHTML = st.needLogin
+      ? `<p class="neg">⚠️ Вход Google истёк${st.email ? ` (<b>${esc(st.email)}</b>)` : ''} — почта и копия в Google не обновляются.</p>
+         <div class="row-form"><button id="gmAgain">Войти снова</button></div>${err}${mail}`
+      : `<p>✅ Вход выполнен${st.email ? `: <b>${esc(st.email)}</b>` : ''}</p>${err}${mail}`;
+    $('#gmAgain')?.addEventListener('click', loginAgain);
     $('#gmOff').onclick = async () => {
       if (!confirm('Выйти из Google? Данные останутся в программе, но перестанут копироваться в Google.')) return;
       afterMail(await API().gmail_disconnect()); renderCloud();
@@ -1011,6 +1015,13 @@ function renderGmailState(st) {
     $('#gmailHelp').open = true;
   }
 }
+// Повторный вход Google, когда старый истёк (телефон)
+function loginAgain(e) {
+  if (e?.currentTarget) { e.currentTarget.disabled = true; e.currentTarget.textContent = 'Открываю вход Google…'; }
+  API().gmail_connect();
+}
+const againBtn = '<button class="ghost" data-again style="margin-top:8px">Войти снова</button>';
+const wireAgain = (root) => root?.querySelectorAll('[data-again]').forEach((b) => b.onclick = loginAgain);
 // ===== Общий блок почты на главной =====
 let mailLoading = false;
 async function loadMail() {
@@ -1028,7 +1039,10 @@ async function loadMail() {
     const msgs = (g.messages || []).map((m) => ({ ...m, src: 'G', link: m.link || `https://mail.google.com/mail/u/0/#inbox/${m.id}` }))
       .sort((a, b) => b.ts - a.ts).slice(0, 6);
     ul.innerHTML = msgs.length ? '' : '<li class="empty">Все письма прочитаны 🎉</li>';
-    if (g.error && !g.messages?.length) ul.insertAdjacentHTML('afterbegin', '<li class="empty neg">Часть писем не загрузилась</li>');
+    if (g.needLogin) {
+      ul.innerHTML = `<li class="empty">Вход Google истёк — письма не обновляются.<br>${againBtn}</li>`;
+      wireAgain(ul);
+    } else if (g.error && !g.messages?.length) ul.innerHTML = `<li class="empty neg">Письма не загрузились: ${esc(g.error)}</li>`;
     msgs.forEach((m) => {
       const li = document.createElement('li');
       li.className = 'mail-item';
@@ -1117,8 +1131,10 @@ function renderExchanges() {
   $('#exNotice').innerHTML = !API()
     ? '<p class="muted">Письма с бирж загружаются в установленной программе.</p>'
     : noMail ? '<div class="notice">Подключите почту в <a class="link" id="exSetup">Настройках</a> — дашборд будет брать заказы, сообщения и оплаты из писем бирж.</div>'
-    : exData.error ? '<p class="neg">Не удалось загрузить письма</p>' : '';
+    : exData.needLogin ? `<div class="notice">Вход Google истёк — письма с бирж не обновляются. ${againBtn}</div>`
+    : exData.error ? `<p class="neg">Не удалось загрузить письма: ${esc(String(exData.error === true ? '' : exData.error))}</p>` : '';
   if ($('#exSetup')) $('#exSetup').onclick = () => go('settings');
+  wireAgain($('#exNotice'));
 
   // Карточки бирж
   const cards = $('#exCards'); cards.innerHTML = '';
@@ -1199,11 +1215,13 @@ function exOverview() {
   }).join('');
   const total = exOn().reduce((a, ex) => a + exIncome(ex), 0);
   const emptyMsg = exData.loading ? 'Загружаю письма с бирж…'
+    : exData.needLogin ? `Вход Google истёк — письма с бирж не обновляются.<br>${againBtn}`
     : exData.error ? 'Не удалось загрузить письма — нажмите «Открыть» → ⟳'
     : API() && !exData.gmail ? 'Подключите почту, чтобы видеть заказы' : 'За неделю писем с бирж нет';
   box.innerHTML = (rows || `<div class="muted">${emptyMsg}</div>`) +
     `<div class="sum-row" style="margin-top:6px"><span>Доход с бирж за месяц</span><b class="pos">≈ ${fmt(total)}</b></div>` +
     (flItems.length ? `<div class="muted small">🆕 FL.ru: ${plural(flItems.length, 'новый проект', 'новых проекта', 'новых проектов')}${S.flKeywords ? ' по вашим словам' : ''}</div>` : '');
+  wireAgain(box);
 }
 
 // Показ/скрытие всего, что связано с биржами, + выбор бирж в Настройках
@@ -1326,6 +1344,8 @@ function applyTheme() {
   $('#modeHint').textContent = t === 'auto'
     ? `Сейчас ${isDayTime() ? 'день — «Светлая» тема' : 'ночь — «Тёмная» тема'}. С ${DAY_FROM}:00 до ${NIGHT_FROM}:00 светлая, остальное время тёмная.`
     : mode ? '' : 'Выбрана тема — она работает всегда, день и ночь её не переключают.';
+  // цвет полосы статуса телефона — под фон темы
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', getComputedStyle(document.body).getPropertyValue('--bg').trim() || '#171412');
   const dn = $('#dayNightBtn');
   dn.textContent = dark ? '☀️' : '🌙';
   dn.title = dark ? 'Включить дневной режим' : 'Включить ночной режим';
@@ -1382,6 +1402,9 @@ window.addEventListener('pywebviewready', () => { if (S._fromLocal) location.rel
   sessionStorage.removeItem('bootTries');
   await load();
   renderAll();
+  // экран показываем, когда он уже заполнен (на телефоне до этого виден только фон темы)
+  document.documentElement.classList.remove('booting');
+  document.documentElement.style.background = '';
   $('#syncBtn').onclick = () => { go('settings'); $('#cloudCard')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
   checkSync();
   syncPull(); // правки с телефона, сделанные, пока программа была закрыта
