@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Мой дашборд</title>
-<link rel="stylesheet" href="style.css?v=20261107012046">
+<link rel="stylesheet" href="style.css?v=20261107013046">
 <meta name="theme-color" content="#171412">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
@@ -35,6 +35,15 @@
   <div class="quote" id="quote"></div>
 </aside>
 <div id="menuShade" class="menu-shade"></div>
+<!-- Телефон: нижнее меню и кнопка «+» (на компьютере скрыты) -->
+<nav class="tabbar" aria-label="Основные разделы">
+  <button data-view="overview"><span class="tl">Главная</span></button>
+  <button data-view="tasks"><span class="tl">Задачи</span></button>
+  <button data-view="calendar"><span class="tl">Календарь</span></button>
+  <button data-view="finance"><span class="tl">Финансы</span></button>
+  <button id="tabMore" data-more="1"><span class="tl">Ещё</span></button>
+</nav>
+<button id="fabAdd" class="fab" title="Новая задача" aria-label="Новая задача"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
 
 <main>
   <!-- Верхняя панель: поиск и уведомления -->
@@ -364,19 +373,19 @@
       <p class="theme-sub">Или тема</p>
       <div class="theme-pick">
         <button class="theme-opt" data-theme="paper">
-          <span class="theme-swatch"><span style="background:#efe9dd"></span><span style="background:#1f1b16"></span><span style="background:#d4541f"></span><span style="background:#2f6b4f"></span></span>
-          Бумага — светлая
+          <span class="theme-swatch"><span style="background:#f3f4f7"></span><span style="background:#ffffff"></span><span style="background:#f0505f"></span><span style="background:#2fb36b"></span></span>
+          Светлая
         </button>
         <button class="theme-opt" data-theme="dark">
-          <span class="theme-swatch"><span style="background:#171412"></span><span style="background:#2c2722"></span><span style="background:#ef7a41"></span><span style="background:#6fb08b"></span></span>
-          Уголь — тёмная
+          <span class="theme-swatch"><span style="background:#0e0f12"></span><span style="background:#23252b"></span><span style="background:#ff5f6d"></span><span style="background:#3ccf7f"></span></span>
+          Тёмная
         </button>
         <button class="theme-opt" data-theme="ocean">
-          <span class="theme-swatch"><span style="background:#0d1922"></span><span style="background:#1b2f3e"></span><span style="background:#23b5c2"></span><span style="background:#5cc89b"></span></span>
+          <span class="theme-swatch"><span style="background:#0b141b"></span><span style="background:#1a2a35"></span><span style="background:#22c3cf"></span><span style="background:#4fd29b"></span></span>
           Океан — тёмная
         </button>
         <button class="theme-opt" data-theme="lavender">
-          <span class="theme-swatch"><span style="background:#ebe7f3"></span><span style="background:#2a2140"></span><span style="background:#7a4fd4"></span><span style="background:#2d7a5f"></span></span>
+          <span class="theme-swatch"><span style="background:#f4f2fa"></span><span style="background:#ffffff"></span><span style="background:#7c5cf0"></span><span style="background:#2fb380"></span></span>
           Лаванда — светлая
         </button>
       </div>
@@ -434,9 +443,9 @@
   </div>
 </div>
 
-<script>window.APP_BUILD="07.11.2026 01:20";</script>
-<script src="config.js?v=20261107012046"></script>
-<script src="api.js?v=20261107012046"></script>
-<script src="app.js?v=20261107012046"></script>
+<script>window.APP_BUILD="07.11.2026 01:30";</script>
+<script src="config.js?v=20261107013046"></script>
+<script src="api.js?v=20261107013046"></script>
+<script src="app.js?v=20261107013046"></script>
 </body>
 </html>
