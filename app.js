@@ -629,9 +629,10 @@ function renderWallet() {
   }).join('');
   const froms = Object.keys(CURS).filter((c) => w.byFrom[c]);
   const own = froms.map((c) => {
-    const f = w.byFrom[c], m = f.month[key] || 0;
+    const f = w.byFrom[c], m = f.month[key] || 0, pct = f.gave ? Math.max(0, f.gave - f.spent) / f.gave * 100 : 0;
     return `<div class="wal-own">
       <div class="sum-row"><span>Потрачено ${CURS[c]} всего</span><b class="neg">${fmt(f.spent, c)}</b></div>
+      <div class="bar"><div style="width:${pct}%"></div></div>
       <div class="muted small">поменяли ${fmt(f.gave, c)} · ещё не потрачено ${fmt(Math.max(0, f.gave - f.spent), c)}${m ? ` · за ${MONTHS[finMonth.getMonth()].toLowerCase()} ${fmt(m, c)}` : ''}</div>
     </div>`;
   }).join('');

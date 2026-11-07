@@ -862,7 +862,7 @@ code { border-radius: 8px; }
 .fin-tabs::-webkit-scrollbar { display: none; }
 .fin-tabs button { flex: none; white-space: nowrap; }
 #finSecHint:empty { display: none; }
-.usd-on { white-space: nowrap; }
+.usd-on { white-space: normal; align-items: flex-start; line-height: 1.35; }
 .usd-rate { max-width: 230px; }
 .usd-note { white-space: nowrap; }
 #finShow > .page-head h2 { margin: 0; font-size: 1.25rem; }
@@ -915,3 +915,9 @@ code { border-radius: 8px; }
 .rep-preview { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow-y: auto; background: var(--panel-2); padding: 8px; border-radius: 10px; }
 .rep-preview img { width: 100%; display: block; box-shadow: 0 1px 4px rgba(0,0,0,.25); background: #fff; }
 .rep-box > * { flex: none; }
+
+/* поля не вылезают за край на телефоне */
+.usd-on input { flex: none; margin-top: 2px; }
+.fld:has(input[type=date]) { flex: 1 1 165px; }
+.fld input[type=date] { min-width: 0; padding-left: 12px; padding-right: 8px; }
+.wal-own .bar > div { background: var(--warn, #e0a030); }
