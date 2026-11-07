@@ -944,3 +944,18 @@ code { border-radius: 8px; }
 .rem-row.past .grow { font-weight: 600; }
 .rem-done { padding: 4px 10px; }
 #remPerm { margin-top: 8px; }
+
+/* Конвертер валют */
+.cv-card { max-width: 640px; display: flex; flex-direction: column; gap: 12px; }
+.cv-input { display: flex; align-items: center; gap: 10px; background: var(--panel-2); border-radius: 14px; padding: 6px 16px; }
+.cv-input input { flex: 1; min-width: 0; font-size: 30px; font-weight: 700; background: transparent; border: 0; padding: 8px 0; box-shadow: none; }
+.cv-input input:focus { outline: none; }
+.cv-sym { font-size: 28px; font-weight: 700; color: var(--muted); }
+.cv-from { display: flex; gap: 6px; flex-wrap: wrap; }
+.cv-row { display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 12px 4px; }
+.cv-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cv-main b { font-weight: 600; }
+.cv-val { font-size: 18px; white-space: nowrap; }
+.flag.cv-flag { width: 30px; height: 20px; }
+.cv-cur-badge { width: 30px; height: 20px; border-radius: 4px; background: var(--panel-2); display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex: none; }
+.ctry-chip .cv-cur-badge { width: 21px; height: 14px; font-size: 11px; }

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Мой дашборд</title>
-<link rel="stylesheet" href="style.css?v=20261107221050">
+<link rel="stylesheet" href="style.css?v=20261107221644">
 <meta name="theme-color" content="#171412">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
@@ -29,6 +29,7 @@
     <button data-view="notes">Заметки</button>
     <button data-view="habits">Привычки</button>
     <button data-view="finance">Финансы</button>
+    <button data-view="converter">Конвертер валют</button>
     <button data-view="analytics">Аналитика</button>
     <button data-view="world">Погода и сервисы</button>
     <button data-view="settings">Настройки</button>
@@ -377,6 +378,19 @@
   </section>
 
   <!-- АНАЛИТИКА -->
+  <section id="view-converter" class="view">
+    <header class="page-head"><h1>Конвертер валют</h1><p class="muted">Впишите сумму — сразу видно, сколько это в других валютах</p></header>
+    <div class="card cv-card">
+      <div class="cv-input">
+        <input id="cvAmount" type="number" step="any" min="0" inputmode="decimal" placeholder="Сумма" value="100">
+        <span id="cvSym" class="cv-sym"></span>
+      </div>
+      <div class="cv-from" id="cvFrom"></div>
+      <ul class="list cv-list" id="cvList"></ul>
+      <div class="muted small" id="cvNote"></div>
+    </div>
+  </section>
+
   <section id="view-analytics" class="view">
     <header class="page-head"><h1>Аналитика</h1><p class="muted">Как у вас идут дела</p></header>
     <div class="grid small" id="anStats"></div>
@@ -523,9 +537,9 @@
     <div class="muted small" id="repMsg"></div>
   </div>
 </div>
-<script>window.APP_BUILD="07.11.2026 22:10";</script>
-<script src="config.js?v=20261107221050"></script>
-<script src="api.js?v=20261107221050"></script>
-<script src="app.js?v=20261107221050"></script>
+<script>window.APP_BUILD="07.11.2026 22:16";</script>
+<script src="config.js?v=20261107221644"></script>
+<script src="api.js?v=20261107221644"></script>
+<script src="app.js?v=20261107221644"></script>
 </body>
 </html>

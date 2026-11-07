@@ -129,6 +129,7 @@ const ICONS = {
   show: '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/><path d="M3 5l1.5 1M21 5l-1.5 1M2 11h1.5M20.5 11H22"/>',
   analytics: '<path d="M3 21h18"/><rect x="5" y="11" width="3" height="7" rx=".8"/><rect x="10.5" y="5" width="3" height="13" rx=".8"/><rect x="16" y="8.5" width="3" height="9.5" rx=".8"/>',
   world: '<circle cx="8" cy="8" r="3"/><path d="M8 2.5v1M2.5 8h1M4.1 4.1l.7.7M11.9 4.1l-.7.7"/><path d="M9.5 20.5h8.5a3.8 3.8 0 0 0 .4-7.6 5.2 5.2 0 0 0-10 1.3 3.2 3.2 0 0 0 1.1 6.3z"/>',
+  converter: '<path d="M4 8h14l-3.5-3.5"/><path d="M20 16H6l3.5 3.5"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
 };
 ICONS.more = '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>';
@@ -146,6 +147,7 @@ function go(view) {
   $('#tabMore')?.classList.toggle('active', !TAB_VIEWS.includes(view)); // раздел из «Ещё» — подсветить «Ещё»
   document.querySelectorAll('.view').forEach((v) => v.classList.toggle('active', v.id === 'view-' + view));
   if (view === 'analytics') renderAnalytics();
+  if (view === 'converter') { renderConverter(); loadRates(); }
   document.body.classList.remove('menu-open'); // на телефоне — закрыть выезжающее меню
   window.scrollTo(0, 0);
 }
@@ -450,7 +452,7 @@ async function loadRates() {
     const j = await fetch('https://www.cbr-xml-daily.ru/daily_json.js').then((r) => r.json());
     const r1 = (c) => j.Valute[c].Value / (j.Valute[c].Nominal || 1);
     S.rates = { USD: r1('USD'), EUR: r1('EUR'), AZN: r1('AZN'), ...Object.fromEntries(['TRY', 'CNY', 'EGP'].filter((c) => j.Valute[c]).map((c) => [c, r1(c)])), date: j.Date.slice(0, 10) };
-    save(); renderFinance(); renderExchanges();
+    save(); renderFinance(); renderExchanges(); renderConverter();
   } catch { /* остаётся последний сохранённый курс */ }
 }
 
@@ -981,6 +983,50 @@ $('#repSave').onclick = async () => {
 $('#repShare').onclick = async () => {
   try { await navigator.share({ files: [repFile()], title: 'Мои расходы' }); } catch { /* отменили */ }
 };
+
+// ===== Конвертер валют (по курсу ЦБ РФ) =====
+const CV_CURS = [
+  { c: 'TRY', name: 'Турецкая лира', f: 'TR' },
+  { c: 'EGP', name: 'Египетский фунт', f: 'EG' },
+  { c: 'RUB', name: 'Российский рубль', f: 'RU' },
+  { c: 'AZN', name: 'Азербайджанский манат', f: 'AZ' },
+  { c: 'CNY', name: 'Китайский юань', f: 'CN' },
+  { c: 'USD', name: 'Доллар США' },
+  { c: 'EUR', name: 'Евро' },
+];
+const cvState = () => { try { return JSON.parse(localStorage.getItem('conv.state')) || {}; } catch { return {}; } };
+const cvBadge = (x) => x.f ? flag(x.f, 'cv-flag') : `<span class="cv-cur-badge">${CURS[x.c]}</span>`;
+const cvNum = (v) => v.toLocaleString('ru-RU', { maximumFractionDigits: v >= 1 ? 2 : 4 });
+const cvRate = (v) => v.toLocaleString('ru-RU', { maximumFractionDigits: v >= 10 ? 2 : 4 });
+function renderConverter() {
+  const st = cvState(), from = st.from || 'USD';
+  if (st.amt != null && document.activeElement !== $('#cvAmount')) $('#cvAmount').value = st.amt;
+  const a = parseFloat(String($('#cvAmount').value).replace(',', '.')) || 0;
+  $('#cvSym').textContent = CURS[from];
+  $('#cvFrom').innerHTML = CV_CURS.map((x) => `<button type="button" class="ctry-chip${x.c === from ? ' on' : ''}" data-c="${x.c}">${cvBadge(x)}<span>${x.f ? CURS[x.c] + ' ' : ''}${x.c}</span></button>`).join('');
+  $('#cvFrom').querySelectorAll('[data-c]').forEach((b) => b.onclick = () => {
+    localStorage.setItem('conv.state', JSON.stringify({ ...cvState(), from: b.dataset.c })); renderConverter();
+  });
+  if (!S.rates) { $('#cvList').innerHTML = '<li class="empty">Загружаю курс ЦБ… нужен интернет</li>'; $('#cvNote').textContent = ''; return; }
+  $('#cvList').innerHTML = CV_CURS.filter((x) => x.c !== from).map((x) => {
+    const v = conv(a, from, x.c), one = conv(1, from, x.c);
+    return `<li class="cv-row" data-c="${x.c}" data-v="${v ?? ''}">
+      ${cvBadge(x)}
+      <div class="cv-main"><b>${x.name}</b><span class="muted small">1 ${CURS[from]} = ${one !== null ? cvRate(one) : '—'} ${CURS[x.c]}</span></div>
+      <b class="cv-val">${v !== null ? cvNum(v) + ' ' + CURS[x.c] : '—'}</b></li>`;
+  }).join('');
+  // нажали на валюту — пересчитать «от неё»
+  $('#cvList').querySelectorAll('.cv-row').forEach((li) => li.onclick = () => {
+    const v = parseFloat(li.dataset.v);
+    localStorage.setItem('conv.state', JSON.stringify({ from: li.dataset.c, amt: Number.isFinite(v) ? +v.toFixed(2) : a }));
+    renderConverter();
+  });
+  $('#cvNote').textContent = `Курс ЦБ РФ на ${fmtDate(S.rates.date)}. В обменнике курс обычно немного хуже. Нажмите на валюту в списке — посчитаю от неё.`;
+}
+$('#cvAmount').addEventListener('input', () => {
+  localStorage.setItem('conv.state', JSON.stringify({ ...cvState(), amt: $('#cvAmount').value }));
+  renderConverter();
+});
 
 // ===== Шоу: расходы на светодиодное шоу =====
 const SHOW_CATS = [
