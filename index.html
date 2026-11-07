@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Мой дашборд</title>
-<link rel="stylesheet" href="style.css?v=20261107210832">
+<link rel="stylesheet" href="style.css?v=20261107213849">
 <meta name="theme-color" content="#171412">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
@@ -209,16 +209,17 @@
       </div>
     </header>
     <div class="tabs fin-tabs" id="finTabs"></div>
+    <div class="ctry-tabs" id="finCtry"></div>
     <div class="card wallet" id="wallet">
       <div class="wal-head"><h3>💱 Обмен валюты</h3><button type="button" id="fxAddBtn" class="ghost">+ Поменял деньги</button></div>
       <form id="fxForm" class="fin-form hidden">
         <div class="fin-row">
           <label class="fld grow"><span>Отдал</span><input id="fxFrom" type="number" step="any" min="0" inputmode="decimal" placeholder="Например, 100" required></label>
-          <label class="fld"><span>Валюта</span><select id="fxFromCur"><option value="USD" selected>$ доллары</option><option value="RUB">₽ рубли</option><option value="EUR">€ евро</option><option value="AZN">₼ манаты</option><option value="TRY">₺ лиры</option></select></label>
+          <label class="fld"><span>Валюта</span><select id="fxFromCur"><option value="USD" selected>$ доллары</option><option value="RUB">₽ рубли</option><option value="EUR">€ евро</option><option value="AZN">₼ манаты</option><option value="TRY">₺ лиры</option><option value="CNY">¥ юани</option><option value="EGP">E£ фунты</option></select></label>
         </div>
         <div class="fin-row">
           <label class="fld grow"><span>Получил</span><input id="fxTo" type="number" step="any" min="0" inputmode="decimal" placeholder="Например, 4000" required></label>
-          <label class="fld"><span>Валюта</span><select id="fxToCur"><option value="USD">$ доллары</option><option value="RUB">₽ рубли</option><option value="EUR">€ евро</option><option value="AZN">₼ манаты</option><option value="TRY" selected>₺ лиры</option></select></label>
+          <label class="fld"><span>Валюта</span><select id="fxToCur"><option value="USD">$ доллары</option><option value="RUB">₽ рубли</option><option value="EUR">€ евро</option><option value="AZN">₼ манаты</option><option value="TRY" selected>₺ лиры</option><option value="CNY">¥ юани</option><option value="EGP">E£ фунты</option></select></label>
         </div>
         <div class="muted small" id="fxCalc"></div>
         <div class="fin-row">
@@ -237,9 +238,10 @@
         <label class="fld"><span>Что</span><select id="txType"><option value="out">Расход</option><option value="in">Доход</option></select></label>
         <label class="fld" id="txSecFld"><span>Раздел</span><select id="txSec"><option value="personal">🏠 Личные</option><option value="work">💼 Рабочие</option><option value="dev">👨‍💻 Программисты</option><option value="agents">🤝 Агенты</option><option value="">Без раздела</option></select></label>
       </div>
+      <div class="fld"><span>Страна</span><div class="ctry-pick" id="txCtry"></div></div>
       <div class="fin-row">
         <label class="fld grow"><span>Сумма</span><input id="txAmount" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Например, 3000" required></label>
-        <label class="fld"><span>Валюта</span><select id="txCur"><option value="RUB">₽ рубли</option><option value="USD">$ доллары</option><option value="EUR">€ евро</option><option value="AZN">₼ манаты</option><option value="TRY">₺ лиры</option></select></label>
+        <label class="fld"><span>Валюта</span><select id="txCur"><option value="RUB">₽ рубли</option><option value="USD">$ доллары</option><option value="EUR">€ евро</option><option value="AZN">₼ манаты</option><option value="TRY">₺ лиры</option><option value="CNY">¥ юани</option><option value="EGP">E£ фунты</option></select></label>
       </div>
       <label class="check usd-on" id="txUsdWrap"><input type="checkbox" id="txUsdOn"> Свой курс — менял $, чтобы заплатить</label>
       <div class="muted small wal-hint hidden" id="txWalHint"></div>
@@ -259,6 +261,7 @@
       <div class="card"><h3 id="finSumTitle">Итоги месяца</h3><div id="finSummary"></div><button type="button" class="ghost rep-open" id="repBtn">📄 Скачать отчёт PDF</button></div>
       <div class="card" id="finSecsCard"><h3>Расходы по разделам</h3><div id="finSecs"></div></div>
       <div class="card" id="finCatsCard"><h3>Расходы по категориям</h3><div id="finCats"></div></div>
+      <div class="card hidden" id="finCtryCard"><h3>По странам</h3><div id="finCtryBars"></div></div>
     </div>
     <div class="card"><h3>Операции</h3><ul id="txList" class="list"></ul></div>
     </div>
@@ -282,6 +285,8 @@
         <button type="button" class="sh-chip" data-v="EUR">€ в евро</button>
         <button type="button" class="sh-chip" data-v="AZN">₼ в манатах</button>
         <button type="button" class="sh-chip" data-v="TRY">₺ в лирах</button>
+        <button type="button" class="sh-chip" data-v="CNY">¥ в юанях</button>
+        <button type="button" class="sh-chip" data-v="EGP">E£ в фунтах</button>
       </div>
     </div>
 
@@ -289,9 +294,10 @@
 
     <form id="shForm" class="card sh-form">
       <div class="sh-pick" id="shPick"></div>
+      <div class="ctry-pick" id="shCtry"></div>
       <div class="row-form">
         <input id="shAmount" type="number" step="0.01" min="0" placeholder="Сумма" required>
-        <select id="shCur" title="Валюта"><option value="RUB">₽ рубли</option><option value="USD">$ доллары</option><option value="EUR">€ евро</option><option value="AZN">₼ манаты</option><option value="TRY">₺ лиры</option></select>
+        <select id="shCur" title="Валюта"><option value="RUB">₽ рубли</option><option value="USD">$ доллары</option><option value="EUR">€ евро</option><option value="AZN">₼ манаты</option><option value="TRY">₺ лиры</option><option value="CNY">¥ юани</option><option value="EGP">E£ фунты</option></select>
       <label class="check usd-on" id="shUsdWrap"><input type="checkbox" id="shUsdOn"> Свой курс — менял $, чтобы заплатить</label>
         <div class="muted small wal-hint hidden" id="shWalHint"></div>
         <div class="usd-box hidden" id="shUsdBox">
@@ -314,7 +320,7 @@
         <div id="shBudget"></div>
         <form id="shBudgetForm" class="row-form compact">
           <input id="shBudgetInput" type="number" min="0" step="1" placeholder="Общий бюджет">
-          <select id="shBudgetCur" title="Валюта бюджета"><option value="RUB">₽</option><option value="USD">$</option><option value="EUR">€</option><option value="AZN">₼</option><option value="TRY">₺</option></select>
+          <select id="shBudgetCur" title="Валюта бюджета"><option value="RUB">₽</option><option value="USD">$</option><option value="EUR">€</option><option value="AZN">₼</option><option value="TRY">₺</option><option value="CNY">¥</option><option value="EGP">E£</option></select>
           <button>Сохранить</button>
         </form>
       </div>
@@ -501,16 +507,16 @@
       <label class="fld"><span>С</span><input type="date" id="repFrom"></label>
       <label class="fld"><span>По</span><input type="date" id="repTo"></label>
     </div>
-    <label class="fld"><span>Итоги считать в</span><select id="repCur"></select></label>
+    <div class="fin-row"><label class="fld"><span>Страна</span><select id="repCtry"></select></label><label class="fld"><span>Итоги считать в</span><select id="repCur"></select></label></div>
     <div class="muted small">Так будет выглядеть файл:</div>
     <div id="repPreview" class="rep-preview"></div>
     <div class="fin-row"><button type="button" id="repSave">⬇️ Скачать PDF</button><button type="button" class="ghost hidden" id="repShare">📤 Отправить…</button></div>
     <div class="muted small" id="repMsg"></div>
   </div>
 </div>
-<script>window.APP_BUILD="07.11.2026 21:08";</script>
-<script src="config.js?v=20261107210832"></script>
-<script src="api.js?v=20261107210832"></script>
-<script src="app.js?v=20261107210832"></script>
+<script>window.APP_BUILD="07.11.2026 21:38";</script>
+<script src="config.js?v=20261107213849"></script>
+<script src="api.js?v=20261107213849"></script>
+<script src="app.js?v=20261107213849"></script>
 </body>
 </html>

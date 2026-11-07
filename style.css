@@ -921,3 +921,14 @@ code { border-radius: 8px; }
 .fld:has(input[type=date]) { flex: 1 1 165px; }
 .fld input[type=date] { min-width: 0; padding-left: 12px; padding-right: 8px; }
 .wal-own .bar > div { background: var(--warn, #e0a030); }
+
+/* Страны */
+.flag { width: 21px; height: 14px; border-radius: 2px; flex: none; vertical-align: -2px; box-shadow: 0 0 0 1px rgba(0,0,0,.15); }
+.flag.sm { width: 16px; height: 11px; vertical-align: -1px; }
+.ctry-pick, .ctry-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.ctry-tabs { margin: -4px 0 12px; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 2px; }
+.ctry-tabs.hidden { display: none; }
+.ctry-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: 999px; background: var(--panel-2); color: var(--text); border: 1.5px solid transparent; font-size: 14px; white-space: nowrap; flex: none; }
+.ctry-chip.on { border-color: var(--accent, #2bb5c4); background: var(--panel); font-weight: 600; }
+.sh-form .ctry-pick { margin: 8px 0; }
+.ctry-tabs { scrollbar-width: none; } .ctry-tabs::-webkit-scrollbar { display: none; }

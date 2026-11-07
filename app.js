@@ -368,6 +368,56 @@ function usdField(pre) {
     sync,
   };
 }
+// ===== Страны: где потрачены / получены деньги =====
+const COUNTRIES = [
+  { id: 'AZ', name: 'Азербайджан', cur: 'AZN' },
+  { id: 'TR', name: 'Турция', cur: 'TRY' },
+  { id: 'RU', name: 'Россия', cur: 'RUB' },
+  { id: 'EG', name: 'Египет', cur: 'EGP' },
+  { id: 'CN', name: 'Китай', cur: 'CNY' },
+];
+const ctryOf = (id) => COUNTRIES.find((c) => c.id === id);
+// Флаги рисуем SVG — на Windows эмодзи-флаги не отображаются
+const starPts = (cx, cy, r, n = 5, rot = -90, inner = 0.4) => Array.from({ length: n * 2 }, (_, i) => {
+  const a = (rot + i * 180 / n) * Math.PI / 180, rr = i % 2 ? r * inner : r;
+  return `${(cx + rr * Math.cos(a)).toFixed(2)},${(cy + rr * Math.sin(a)).toFixed(2)}`;
+}).join(' ');
+const FLAG_BODY = {
+  RU: '<rect width="30" height="20" fill="#fff"/><rect y="6.67" width="30" height="6.67" fill="#0039a6"/><rect y="13.33" width="30" height="6.67" fill="#d52b1e"/>',
+  AZ: `<rect width="30" height="6.67" fill="#00b5e2"/><rect y="6.67" width="30" height="6.67" fill="#ef3340"/><rect y="13.33" width="30" height="6.67" fill="#509e2f"/><circle cx="14" cy="10" r="2.7" fill="#fff"/><circle cx="14.7" cy="10" r="2.2" fill="#ef3340"/><polygon points="${starPts(17.6, 10, 1.25, 8, -90, 0.5)}" fill="#fff"/>`,
+  TR: `<rect width="30" height="20" fill="#e30a17"/><circle cx="11" cy="10" r="5" fill="#fff"/><circle cx="12.25" cy="10" r="4" fill="#e30a17"/><polygon points="${starPts(17.3, 10, 2.1, 5, 180)}" fill="#fff"/>`,
+  EG: '<rect width="30" height="6.67" fill="#ce1126"/><rect y="6.67" width="30" height="6.67" fill="#fff"/><rect y="13.33" width="30" height="6.67" fill="#000"/><path d="M15 7.6l1.6 1.2-.5 2.6h-2.2l-.5-2.6z" fill="#c09300"/>',
+  CN: `<rect width="30" height="20" fill="#ee1c25"/><polygon points="${starPts(5, 5, 3)}" fill="#ffde00"/><polygon points="${starPts(10, 2, 1)}" fill="#ffde00"/><polygon points="${starPts(12, 4, 1)}" fill="#ffde00"/><polygon points="${starPts(12, 7, 1)}" fill="#ffde00"/><polygon points="${starPts(10, 9, 1)}" fill="#ffde00"/>`,
+};
+const flag = (id, cls = '') => (FLAG_BODY[id] ? `<svg class="flag ${cls}" viewBox="0 0 30 20" aria-hidden="true">${FLAG_BODY[id]}</svg>` : '');
+const ctryLabel = (id) => { const c = ctryOf(id); return c ? `${flag(id)} ${c.name}` : ''; };
+
+// Выбор страны в форме: флажки; повторное нажатие — снять. При выборе ставится валюта страны.
+function ctryPicker(boxId, curId, onPick) {
+  let val = S.lastCountry || '';
+  const draw = () => {
+    $(boxId).innerHTML = COUNTRIES.map((c) => `<button type="button" class="ctry-chip${c.id === val ? ' on' : ''}" data-c="${c.id}">${flag(c.id)}<span>${c.name}</span></button>`).join('');
+    $(boxId).querySelectorAll('[data-c]').forEach((b) => b.onclick = () => {
+      val = val === b.dataset.c ? '' : b.dataset.c;
+      S.lastCountry = val;
+      if (val) { const sel = $(curId); sel.value = ctryOf(val).cur; sel.dispatchEvent(new Event('change')); }
+      draw(); onPick?.();
+    });
+  };
+  return { get: () => val, draw };
+}
+const txCtry = ctryPicker('#txCtry', '#txCur');
+const shCtry = ctryPicker('#shCtry', '#shCur');
+let finCountry = 'all';
+const ctryOk = (r) => finCountry === 'all' || (finCountry === 'none' ? !r.country : r.country === finCountry);
+function renderCtryTabs() {
+  const used = new Set([...S.tx, ...(S.show?.items || [])].map((r) => r.country).filter(Boolean));
+  const list = COUNTRIES.filter((c) => used.has(c.id) || c.id === finCountry);
+  $('#finCtry').classList.toggle('hidden', !list.length);
+  $('#finCtry').innerHTML = `<button type="button" class="ctry-chip${finCountry === 'all' ? ' on' : ''}" data-c="all">🌍 <span>Все страны</span></button>` +
+    list.map((c) => `<button type="button" class="ctry-chip${c.id === finCountry ? ' on' : ''}" data-c="${c.id}">${flag(c.id)}<span>${c.name}</span></button>`).join('');
+  $('#finCtry').querySelectorAll('[data-c]').forEach((b) => b.onclick = () => { finCountry = b.dataset.c; renderFinance(); renderShow(); });
+}
 const txUsd = usdField('tx');
 $('#txForm').onsubmit = (e) => {
   e.preventDefault();
@@ -377,14 +427,14 @@ $('#txForm').onsubmit = (e) => {
   S.tx.push({
     id: uid(), type: $('#txType').value, amount: parseFloat($('#txAmount').value), cur: $('#txCur').value,
     cat: $('#txCat').value.trim(), date: $('#txDate').value, note: $('#txNote').value.trim(),
-    ...(sec ? { sec } : {}), ...(usdRate ? { usdRate } : {}),
+    ...(sec ? { sec } : {}), ...(usdRate ? { usdRate } : {}), ...(txCtry.get() ? { country: txCtry.get() } : {}),
   });
   $('#txAmount').value = ''; $('#txNote').value = ''; txUsd.reset();
   save(); renderFinance(); renderExchanges();
 };
 
 // ----- Валюты: ₽, $, € и курс ЦБ для пересчёта в рубли -----
-const CURS = { RUB: '₽', USD: '$', EUR: '€', AZN: '₼', TRY: '₺' };
+const CURS = { RUB: '₽', USD: '$', EUR: '€', AZN: '₼', TRY: '₺', CNY: '¥', EGP: 'E£' };
 const curOf = (t) => t.cur || 'RUB';
 const fmt = (n, cur = 'RUB') => n.toLocaleString('ru-RU', { maximumFractionDigits: 2 }) + ' ' + CURS[cur];
 const rate = (cur) => (cur === 'RUB' ? 1 : S.rates?.[cur] || null);
@@ -392,14 +442,14 @@ const toRub = (amount, cur) => amount * (rate(cur) ?? 0);
 // Разбирает «1500», «25$», «$25», «20 €», «20eur» → { n, cur }
 function parseMoney(s) {
   s = String(s || '').trim();
-  const cur = /\$|usd|дол/i.test(s) ? 'USD' : /€|eur|евро/i.test(s) ? 'EUR' : /₼|azn|манат/i.test(s) ? 'AZN' : /₺|try|лир/i.test(s) ? 'TRY' : 'RUB';
+  const cur = /\$|usd|дол/i.test(s) ? 'USD' : /€|eur|евро/i.test(s) ? 'EUR' : /₼|azn|манат/i.test(s) ? 'AZN' : /₺|try|лир/i.test(s) ? 'TRY' : /¥|cny|юан/i.test(s) ? 'CNY' : /e£|egp|фунт/i.test(s) ? 'EGP' : 'RUB';
   return { n: num(s.replace(/[^\d.,\s]/g, '')), cur };
 }
 async function loadRates() {
   try {
     const j = await fetch('https://www.cbr-xml-daily.ru/daily_json.js').then((r) => r.json());
     const r1 = (c) => j.Valute[c].Value / (j.Valute[c].Nominal || 1);
-    S.rates = { USD: r1('USD'), EUR: r1('EUR'), AZN: r1('AZN'), ...(j.Valute.TRY ? { TRY: r1('TRY') } : {}), date: j.Date.slice(0, 10) };
+    S.rates = { USD: r1('USD'), EUR: r1('EUR'), AZN: r1('AZN'), ...Object.fromEntries(['TRY', 'CNY', 'EGP'].filter((c) => j.Valute[c]).map((c) => [c, r1(c)])), date: j.Date.slice(0, 10) };
     save(); renderFinance(); renderExchanges();
   } catch { /* остаётся последний сохранённый курс */ }
 }
@@ -453,9 +503,10 @@ function renderFinance() {
   $('#finTx').classList.toggle('hidden', isShow);
   $('#finShow').classList.toggle('hidden', !isShow);
   $('#finMonthSwitch').classList.toggle('hidden', isShow);
+  renderCtryTabs();
   renderWallet();
   if (isShow) return;
-  txUsd.sync();
+  txUsd.sync(); txCtry.draw();
   $('#txSecFld').classList.toggle('hidden', finSec !== 'all');
   $('#txFormTitle').textContent = finSec === 'all' ? 'Новая запись' : `Новая запись — ${sec.name}`;
   $('#txCatLbl').textContent = finSec === 'dev' ? 'Программист' : finSec === 'agents' ? 'Агент' : 'Категория';
@@ -463,7 +514,7 @@ function renderFinance() {
   $('#finSecHint').textContent = sec.hint || '';
   $('#finMonth').textContent = `${MONTHS[finMonth.getMonth()]} ${finMonth.getFullYear()}`;
   $('#catList').innerHTML = [...new Set(S.tx.filter((t) => finSec === 'all' || secOf(t) === finSec).map((t) => t.cat))].map((c) => `<option value="${esc(c)}">`).join('');
-  const tx = monthTotals(key, finSec).tx;
+  const tx = monthTotals(key, finSec).tx.filter(ctryOk);
 
   // ---- Итоги: всё пересчитано в одну валюту, которую выбрали кнопками ----
   const vc = finView();
@@ -500,14 +551,22 @@ function renderFinance() {
     $('#finSecs').innerHTML = bars(FIN_SECS.filter((x) => x.id !== 'all').map((x) => ({
       id: x.id, name: x.name,
       v: x.id === 'show'
-        ? showData().items.filter((it) => it.date.startsWith(key)).reduce((a, it) => a + (recConv(it, vc) ?? 0), 0)
-        : S.tx.filter((t) => t.type === 'out' && t.date.startsWith(key) && secOf(t) === x.id).reduce((a, t) => a + (recConv(t, vc) ?? 0), 0),
+        ? showData().items.filter((it) => it.date.startsWith(key) && ctryOk(it)).reduce((a, it) => a + (recConv(it, vc) ?? 0), 0)
+        : S.tx.filter((t) => t.type === 'out' && t.date.startsWith(key) && secOf(t) === x.id && ctryOk(t)).reduce((a, t) => a + (recConv(t, vc) ?? 0), 0),
     })), true);
     $('#finSecs').querySelectorAll('[data-s]').forEach((el) => el.onclick = () => setFinSec(el.dataset.s));
   } else {
     const cats = {};
     outs.forEach((t) => cats[t.cat] = (cats[t.cat] || 0) + (recConv(t, vc) ?? 0));
     $('#finCats').innerHTML = bars(Object.entries(cats).map(([name, v]) => ({ name: esc(name), v })));
+  }
+  {
+    const pool = [...outs, ...(finSec === 'all' ? showData().items.filter((it) => it.date.startsWith(key) && ctryOk(it)) : [])];
+    const by = {}; pool.forEach((t) => { const k = t.country || ''; by[k] = (by[k] || 0) + (recConv(t, vc) ?? 0); });
+    const has = Object.keys(by).some(Boolean);
+    $('#finCtryCard').classList.toggle('hidden', !has || finCountry !== 'all');
+    if (has) $('#finCtryBars').innerHTML = bars(Object.entries(by).map(([k, v]) => ({ id: k, name: k ? ctryLabel(k) : 'Без страны', v })), true);
+    $('#finCtryBars').querySelectorAll('[data-s]').forEach((el) => el.onclick = () => { finCountry = el.dataset.s || 'none'; renderFinance(); renderShow(); });
   }
 
   // ---- Операции: две строки — что и сколько; дата, раздел и как оплачено ----
@@ -519,7 +578,7 @@ function renderFinance() {
     li.className = 'tx-row';
     li.innerHTML = `<div class="tx-main">
         <div class="tx-top"><span class="tx-cat">${esc(t.cat)}</span><b class="tx-sum ${t.type === 'in' ? 'pos' : 'neg'}">${t.type === 'in' ? '+' : '−'}${fmt(t.amount, c)}</b></div>
-        <div class="muted small">${fmtDate(t.date)}${finSec === 'all' && secOf(t) ? ` · ${secName(secOf(t))}` : ''}${t.note ? ` · ${esc(t.note)}` : ''}</div>
+        <div class="muted small">${t.country ? flag(t.country, 'sm') + ' ' : ''}${fmtDate(t.date)}${finSec === 'all' && secOf(t) ? ` · ${secName(secOf(t))}` : ''}${t.note ? ` · ${esc(t.note)}` : ''}</div>
         ${usdNote(t)}${other !== null ? `<div class="muted small">≈ ${fmt(other, vc)} по курсу ЦБ</div>` : ''}
       </div><button class="del" title="Удалить">✕</button>`;
     li.querySelector('.del').onclick = () => { if (!confirm('Удалить эту запись?')) return; S.tx = S.tx.filter((x) => x !== t); save(); renderFinance(); };
@@ -609,7 +668,7 @@ $('#fxForm').onsubmit = (e) => {
   fxShow(false); save(); renderFinance(); renderShow();
 };
 let walOpen = false;
-const CUR_GEN = { RUB: 'рублей', USD: 'долларов', EUR: 'евро', AZN: 'манат', TRY: 'лир' };
+const CUR_GEN = { RUB: 'рублей', USD: 'долларов', EUR: 'евро', AZN: 'манат', TRY: 'лир', CNY: 'юаней', EGP: 'фунтов' };
 function renderWallet() {
   const w = wallet(), key = monthKey(finMonth);
   const tos = Object.keys(CURS).filter((c) => w.byTo[c]);
@@ -676,15 +735,17 @@ function repRange(p) {
 }
 
 // Что попадёт в отчёт: блоки (заголовки, строки, итоги) — потом раскладываются по страницам
-function repBlocks({ from, to, sec, vc }) {
-  const inR = (d) => d >= from && d <= to;
+function repBlocks({ from, to, sec, vc, ctry = 'all' }) {
+  const inR0 = (d) => d >= from && d <= to;
+  const cOk = (r) => ctry === 'all' || r.country === ctry;
   const spends = [];
-  if (sec !== 'show') S.tx.filter((t) => t.type === 'out' && inR(t.date) && (sec === 'all' || secOf(t) === sec))
+  const inR = (d, r) => inR0(d) && (!r || cOk(r));
+  if (sec !== 'show') S.tx.filter((t) => t.type === 'out' && inR(t.date, t) && (sec === 'all' || secOf(t) === sec))
     .forEach((t) => spends.push({ r: t, sec: secOf(t) || 'personal', cat: t.cat || 'Без категории', note: t.note || '' }));
-  if (sec === 'all' || sec === 'show') (S.show?.items || []).filter((i) => inR(i.date))
+  if (sec === 'all' || sec === 'show') (S.show?.items || []).filter((i) => inR(i.date, i))
     .forEach((i) => spends.push({ r: i, sec: 'show', cat: shCatOf(i.cat).name, note: [i.who, i.note].filter(Boolean).join(' · ') }));
-  const incomes = sec === 'all' ? S.tx.filter((t) => t.type === 'in' && inR(t.date)) : [];
-  const fx = fxList().filter((f) => inR(f.date)).sort((a, b) => a.date.localeCompare(b.date));
+  const incomes = sec === 'all' ? S.tx.filter((t) => t.type === 'in' && inR(t.date, t)) : [];
+  const fx = fxList().filter((f) => inR0(f.date)).sort((a, b) => a.date.localeCompare(b.date));
   const val = (r) => recConv(r, vc);
   const sum = (list) => list.reduce((a, x) => a + (val(x.r || x) ?? 0), 0);
   const written = (list) => { const by = {}; list.forEach((x) => { const r = x.r || x; (by[curOf(r)] ||= { v: 0 }).v += r.amount; }); return curLines(by, 'v'); };
@@ -695,7 +756,7 @@ function repBlocks({ from, to, sec, vc }) {
 
   const dates = [...spends.map((x) => x.r.date), ...incomes.map((t) => t.date)].sort();
   const realFrom = from === '0000-01-01' ? dates[0] : from, realTo = to === '9999-12-31' ? dates[dates.length - 1] : to;
-  const secTitle = sec === 'all' ? 'все разделы' : plainName(secName(sec));
+  const secTitle = (sec === 'all' ? 'все разделы' : plainName(secName(sec))) + (ctry !== 'all' ? `   ·   Страна: ${ctryOf(ctry)?.name}` : '');
   const B = [];
   B.push({ t: 'title', text: 'Мои расходы' });
   B.push({ t: 'sub', text: `Период: ${realFrom ? ddmmyy(realFrom) : '—'} — ${realTo ? ddmmyy(realTo) : '—'}   ·   Раздел: ${secTitle}` });
@@ -724,6 +785,12 @@ function repBlocks({ from, to, sec, vc }) {
       .forEach(({ g, v }) => B.push({ t: 'bar', l: plainName(secName(g.id)), r: `${ap}${fmt(v, vc)}  ·  ${total ? Math.round(v / total * 100) : 0}%`, p: total ? v / total : 0 }));
   }
 
+  if (ctry === 'all' && spends.some((x) => x.r.country)) {
+    const by = {}; spends.forEach((x) => { const k = x.r.country || ''; by[k] = (by[k] || 0) + (val(x.r) ?? 0); });
+    B.push({ t: 'h', text: 'По странам' });
+    Object.entries(by).sort((a, b) => b[1] - a[1]).forEach(([k, v]) => B.push({ t: 'bar', l: k ? ctryOf(k).name : 'Без страны', r: `${ap}${fmt(v, vc)}  ·  ${total ? Math.round(v / total * 100) : 0}%`, p: total ? v / total : 0 }));
+  }
+
   // Подробно: раздел → категория (с итогом) → каждая покупка
   groups.map((g) => ({ g, v: sum(g.list) })).sort((a, b) => b.v - a.v).forEach(({ g, v: gv }) => {
     B.push({ t: 'h', text: plainName(secName(g.id)), r: ap + fmt(gv, vc) });
@@ -732,7 +799,7 @@ function repBlocks({ from, to, sec, vc }) {
     Object.entries(cats).map(([c, list]) => ({ c, list, v: sum(list) })).sort((a, b) => b.v - a.v).forEach(({ c, list, v }) => {
       B.push({ t: 'cat', l: c, r: `${ap}${fmt(v, vc)}  ·  ${list.length} шт.` });
       list.sort((a, b) => a.r.date.localeCompare(b.r.date)).forEach((x) => {
-        const r = x.r, cur = curOf(r), o = val(r), sub = stripTags(usdNote(r));
+        const r = x.r, cur = curOf(r), o = val(r), sub = [r.country && ctry === 'all' ? ctryOf(r.country)?.name : '', stripTags(usdNote(r))].filter(Boolean).join(' · ');
         const r2 = cur !== vc && o !== null && !sub.includes(fmt(o, vc)) ? '≈ ' + fmt(o, vc) : '';
         B.push({ t: 'row', d: ddmm(r.date), l: x.note || '—', r: '−' + fmt(r.amount, cur), r2, sub });
       });
@@ -868,7 +935,7 @@ function repPdf(pages) {
 let repCache = null;
 function repOpts() {
   const [from, to] = repRange($('#repPeriod').value);
-  return { from, to, sec: $('#repSec').value, vc: $('#repCur').value };
+  return { from, to, sec: $('#repSec').value, vc: $('#repCur').value, ctry: $('#repCtry').value };
 }
 function repRefresh() {
   $('#repDates').classList.toggle('hidden', $('#repPeriod').value !== 'custom');
@@ -888,12 +955,14 @@ $('#repBtn').onclick = () => {
   $('#repSec').value = finSec;
   $('#repCur').innerHTML = Object.keys(CURS).map((c) => `<option value="${c}">${CURS[c]} ${CUR_GEN[c]}</option>`).join('');
   $('#repCur').value = finView();
+  $('#repCtry').innerHTML = '<option value="all">Все страны</option>' + COUNTRIES.map((c) => `<option value="${c.id}">${c.name}</option>`).join('');
+  $('#repCtry').value = ['all', 'none'].includes(finCountry) ? 'all' : finCountry;
   if (!$('#repFrom').value) { $('#repFrom').value = today().slice(0, 8) + '01'; $('#repTo').value = today(); }
   $('#repModal').classList.remove('hidden');
   $('#repShare').classList.toggle('hidden', !(navigator.canShare && navigator.canShare({ files: [new File(['x'], 'x.pdf', { type: 'application/pdf' })] })));
   repRefresh();
 };
-['#repPeriod', '#repSec', '#repCur', '#repFrom', '#repTo'].forEach((id) => $(id).addEventListener('change', repRefresh));
+['#repPeriod', '#repSec', '#repCur', '#repCtry', '#repFrom', '#repTo'].forEach((id) => $(id).addEventListener('change', repRefresh));
 $('#repClose').onclick = () => $('#repModal').classList.add('hidden');
 $('#repModal').onclick = (e) => { if (e.target.id === 'repModal') $('#repModal').classList.add('hidden'); };
 $('#repSave').onclick = async () => {
@@ -941,7 +1010,7 @@ $('#shForm').onsubmit = (e) => {
   if (usdRate === null) { alert('Укажите курс: сколько за 1 доллар'); shUsd.focus(); return; }
   showData().items.push({
     id: uid(), cat: shCat, amount, cur: $('#shCur').value, date: $('#shDate').value,
-    who: $('#shWho').value.trim(), note: $('#shNote').value.trim(), ...(usdRate ? { usdRate } : {}),
+    who: $('#shWho').value.trim(), note: $('#shNote').value.trim(), ...(usdRate ? { usdRate } : {}), ...(shCtry.get() ? { country: shCtry.get() } : {}),
   });
   $('#shAmount').value = ''; $('#shNote').value = ''; $('#shWho').value = ''; shUsd.reset();
   // запись в месяце, который сейчас открыт, — чтобы сразу её увидеть
@@ -992,8 +1061,10 @@ function renderShow() {
   const sh = showData();
   const view = shView();
   const key = monthKey(shMonth);
-  const monthItems = sh.items.filter((i) => i.date.startsWith(key));
-  const period = shPeriod === 'month' ? monthItems : sh.items;
+  shCtry.draw();
+  const shown = sh.items.filter(ctryOk);
+  const monthItems = shown.filter((i) => i.date.startsWith(key));
+  const period = shPeriod === 'month' ? monthItems : shown;
   const periodName = shPeriod === 'month' ? `${MONTHS[shMonth.getMonth()]} ${shMonth.getFullYear()}` : 'всё время';
   $('#shMonth').textContent = `${MONTHS[shMonth.getMonth()]} ${shMonth.getFullYear()}`;
   document.querySelectorAll('#shPeriod button').forEach((b) => b.classList.toggle('active', b.dataset.p === shPeriod));
@@ -1003,7 +1074,7 @@ function renderShow() {
 
   // Плитки категорий: за месяц и за всё время
   $('#shCats').innerHTML = sh.cats.map((c) => {
-    const m = shMoney(monthItems.filter((i) => i.cat === c.id)), all = shMoney(sh.items.filter((i) => i.cat === c.id));
+    const m = shMoney(monthItems.filter((i) => i.cat === c.id)), all = shMoney(shown.filter((i) => i.cat === c.id));
     return `<div class="card sh-cat${shFilter === c.id ? ' on' : ''}" data-cat="${c.id}">
       <div class="sh-cat-head"><span class="sh-ico">${esc(c.icon)}</span><span>${esc(c.name)}</span></div>
       <div class="big${m.text.length > 10 ? ' sh-long' : ''}">${ap(m)}${m.text}</div>
@@ -1021,7 +1092,7 @@ function renderShow() {
   $('#shWhoList').innerHTML = [...new Set(sh.items.map((i) => i.who).filter(Boolean))].map((w) => `<option value="${esc(w)}">`).join('');
 
   // Итоги
-  const tot = shMoney(period), allTot = shMoney(sh.items);
+  const tot = shMoney(period), allTot = shMoney(shown);
   const noRate = tot.noRate || allTot.noRate;
   $('#shSumTitle').textContent = `Итоги: ${periodName}`;
   $('#shSummary').innerHTML = `
@@ -1068,7 +1139,7 @@ function renderShow() {
     const c = shCatOf(i.cat), cur = curOf(i);
     const other = view !== 'orig' && cur !== view ? recConv(i, view) : null;
     const li = document.createElement('li');
-    li.innerHTML = `<span class="badge">${fmtDate(i.date)}</span>
+    li.innerHTML = `<span class="badge">${i.country ? flag(i.country, 'sm') + ' ' : ''}${fmtDate(i.date)}</span>
       <span class="sh-ico sm">${esc(c.icon)}</span>
       <span class="grow"><b>${esc(c.name)}</b>${i.note ? ` — ${esc(i.note)}` : ''}${i.who ? ` <span class="muted">· ${esc(i.who)}</span>` : ''}</span>
       <b class="neg">−${fmt(i.amount, cur)}</b>
