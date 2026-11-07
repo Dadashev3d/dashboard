@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Мой дашборд</title>
-<link rel="stylesheet" href="style.css?v=20261107153723">
+<link rel="stylesheet" href="style.css?v=20261107155256">
 <meta name="theme-color" content="#171412">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
@@ -211,23 +211,33 @@
     <div class="tabs fin-tabs" id="finTabs"></div>
     <div id="finTx">
     <p id="finSecHint" class="muted small"></p>
-    <form id="txForm" class="row-form">
-      <select id="txType"><option value="out">Расход</option><option value="in">Доход</option></select>
-      <input id="txAmount" type="number" step="0.01" min="0" placeholder="Сумма" required>
-      <select id="txCur" title="Валюта"><option value="RUB">₽ рубли</option><option value="USD">$ доллары</option><option value="EUR">€ евро</option><option value="AZN">₼ манаты</option><option value="TRY">₺ лиры</option></select>
-      <label class="check usd-on" id="txUsdWrap" title="Меняли доллары, чтобы заплатить"><input type="checkbox" id="txUsdOn"> Платил долларами</label>
-      <input id="txUsdRate" class="hidden usd-rate" type="number" step="any" min="0" placeholder="Курс: 1 $ = ?">
-      <select id="txSec" title="Раздел"><option value="personal">🏠 Личные</option><option value="work">💼 Рабочие</option><option value="dev">👨‍💻 Программисты</option><option value="agents">🤝 Агенты</option><option value="">Без раздела</option></select>
-      <input id="txCat" list="catList" placeholder="Категория" required>
+    <form id="txForm" class="card fin-form">
+      <h3 id="txFormTitle">Новая запись</h3>
+      <div class="fin-row">
+        <label class="fld"><span>Что</span><select id="txType"><option value="out">Расход</option><option value="in">Доход</option></select></label>
+        <label class="fld" id="txSecFld"><span>Раздел</span><select id="txSec"><option value="personal">🏠 Личные</option><option value="work">💼 Рабочие</option><option value="dev">👨‍💻 Программисты</option><option value="agents">🤝 Агенты</option><option value="">Без раздела</option></select></label>
+      </div>
+      <div class="fin-row">
+        <label class="fld grow"><span>Сумма</span><input id="txAmount" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Например, 3000" required></label>
+        <label class="fld"><span>Валюта</span><select id="txCur"><option value="RUB">₽ рубли</option><option value="USD">$ доллары</option><option value="EUR">€ евро</option><option value="AZN">₼ манаты</option><option value="TRY">₺ лиры</option></select></label>
+      </div>
+      <label class="check usd-on" id="txUsdWrap"><input type="checkbox" id="txUsdOn"> Платил долларами (менял $, чтобы заплатить)</label>
+      <div class="usd-box hidden" id="txUsdBox">
+        <div class="usd-line"><span>Курс обмена: 1 $ =</span><input id="txUsdRate" type="number" step="any" min="0" inputmode="decimal" placeholder="?"><b id="txUsdSym">₽</b></div>
+        <div class="muted small" id="txUsdCalc"></div>
+      </div>
+      <label class="fld"><span id="txCatLbl">Категория</span><input id="txCat" list="catList" required></label>
       <datalist id="catList"></datalist>
-      <input id="txDate" type="date" required>
-      <input id="txNote" placeholder="Комментарий">
+      <div class="fin-row">
+        <label class="fld"><span>Дата</span><input id="txDate" type="date" required></label>
+        <label class="fld grow"><span>Комментарий</span><input id="txNote" placeholder="необязательно"></label>
+      </div>
       <button>Добавить</button>
     </form>
     <div class="grid">
-      <div class="card"><h3>Итоги месяца</h3><div id="finSummary"></div></div>
-      <div class="card" id="finSecsCard"><h3>По разделам</h3><div id="finSecs"></div></div>
-      <div class="card"><h3>Расходы по категориям</h3><div id="finCats"></div></div>
+      <div class="card"><h3 id="finSumTitle">Итоги месяца</h3><div id="finSummary"></div></div>
+      <div class="card" id="finSecsCard"><h3>Расходы по разделам</h3><div id="finSecs"></div></div>
+      <div class="card" id="finCatsCard"><h3>Расходы по категориям</h3><div id="finCats"></div></div>
     </div>
     <div class="card"><h3>Операции</h3><ul id="txList" class="list"></ul></div>
     </div>
@@ -261,8 +271,11 @@
       <div class="row-form">
         <input id="shAmount" type="number" step="0.01" min="0" placeholder="Сумма" required>
         <select id="shCur" title="Валюта"><option value="RUB">₽ рубли</option><option value="USD">$ доллары</option><option value="EUR">€ евро</option><option value="AZN">₼ манаты</option><option value="TRY">₺ лиры</option></select>
-        <label class="check usd-on" id="shUsdWrap" title="Меняли доллары, чтобы заплатить"><input type="checkbox" id="shUsdOn"> Платил долларами</label>
-        <input id="shUsdRate" class="hidden usd-rate" type="number" step="any" min="0" placeholder="Курс: 1 $ = ?">
+      <label class="check usd-on" id="shUsdWrap"><input type="checkbox" id="shUsdOn"> Платил долларами (менял $, чтобы заплатить)</label>
+        <div class="usd-box hidden" id="shUsdBox">
+          <div class="usd-line"><span>Курс обмена: 1 $ =</span><input id="shUsdRate" type="number" step="any" min="0" inputmode="decimal" placeholder="?"><b id="shUsdSym">₽</b></div>
+          <div class="muted small" id="shUsdCalc"></div>
+        </div>
         <input id="shWho" list="shWhoList" placeholder="Кому / где купил">
         <datalist id="shWhoList"></datalist>
         <input id="shDate" type="date" required>
@@ -455,9 +468,9 @@
   </div>
 </div>
 
-<script>window.APP_BUILD="07.11.2026 15:37";</script>
-<script src="config.js?v=20261107153723"></script>
-<script src="api.js?v=20261107153723"></script>
-<script src="app.js?v=20261107153723"></script>
+<script>window.APP_BUILD="07.11.2026 15:52";</script>
+<script src="config.js?v=20261107155256"></script>
+<script src="api.js?v=20261107155256"></script>
+<script src="app.js?v=20261107155256"></script>
 </body>
 </html>

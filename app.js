@@ -336,19 +336,27 @@ function setFinSec(id) { finSec = id; renderFinance(); if (id === 'show') render
 // «Платил долларами»: курс обмена, по которому меняли доллары, — сохраняется в записи
 function usdField(pre) {
   const cur = $(`#${pre}Cur`), on = $(`#${pre}UsdOn`), inp = $(`#${pre}UsdRate`), wrap = $(`#${pre}UsdWrap`);
+  const box = $(`#${pre}UsdBox`), sym = $(`#${pre}UsdSym`), calc = $(`#${pre}UsdCalc`), amt = $(`#${pre}Amount`);
+  const num2 = (v) => parseFloat(String(v).replace(',', '.'));
   const sync = () => {
     const c = cur.value, isUsd = c === 'USD';
     wrap.classList.toggle('hidden', isUsd);
-    inp.classList.toggle('hidden', isUsd || !on.checked);
-    let cb = null; try { cb = conv(1, 'USD', c); } catch { /* курс ещё не загружен */ }
-    inp.placeholder = `Курс: 1 $ = ? ${CURS[c]}${cb ? ` (ЦБ ≈ ${+cb.toFixed(2)})` : ''}`;
+    box.classList.toggle('hidden', isUsd || !on.checked);
+    sym.textContent = CURS[c];
+    let cb = null; try { cb = conv(1, 'USD', c); } catch { /* курс ЦБ ещё не загружен */ }
+    const a = num2(amt.value), r = num2(inp.value);
+    calc.textContent = a > 0 && r > 0
+      ? `Значит, вы отдали ${fmt(a / r, 'USD')} за ${fmt(a, c)}`
+      : `Впишите, сколько ${CURS[c]} давали за 1 $${cb ? ` (по ЦБ сейчас ≈ ${+cb.toFixed(2)})` : ''} — посчитаю, сколько долларов ушло`;
   };
   cur.addEventListener('change', sync);
+  inp.addEventListener('input', sync);
+  amt.addEventListener('input', sync);
   on.addEventListener('change', () => { sync(); if (on.checked) inp.focus(); });
   // первый показ — из renderFinance/renderShow (валюты и курс к этому времени готовы)
   return {
     // undefined — не платил долларами; null — галочка стоит, а курс не указан
-    value: () => (on.checked && cur.value !== 'USD' ? (parseFloat(String(inp.value).replace(',', '.')) > 0 ? parseFloat(String(inp.value).replace(',', '.')) : null) : undefined),
+    value: () => (on.checked && cur.value !== 'USD' ? (num2(inp.value) > 0 ? num2(inp.value) : null) : undefined),
     reset: () => { on.checked = false; inp.value = ''; sync(); },
     focus: () => inp.focus(),
     sync,
@@ -395,7 +403,7 @@ const usdOfRec = (t) => (t.usdRate > 0 && curOf(t) !== 'USD' ? t.amount / t.usdR
 // Перевод записи в валюту: по своему курсу обмена, если он записан, иначе по курсу ЦБ
 const recConv = (t, to) => { const u = usdOfRec(t); return u === null ? conv(t.amount, curOf(t), to) : conv(u, 'USD', to); };
 const recRub = (t) => recConv(t, 'RUB') ?? 0;
-const usdNote = (t) => { const u = usdOfRec(t); return u === null ? '' : `<span class="muted small usd-note">💵 ${fmt(u, 'USD')} · 1 $ = ${fmt(t.usdRate, curOf(t))}</span>`; };
+const usdNote = (t) => { const u = usdOfRec(t); return u === null ? '' : `<div class="muted small">оплачено ${fmt(u, 'USD')} · курс 1 $ = ${fmt(t.usdRate, curOf(t))}</div>`; };
 
 const monthKey = (d) => iso(d).slice(0, 7);
 function monthTotals(key, sec = 'all') {
@@ -411,6 +419,8 @@ function monthTotals(key, sec = 'all') {
 function curLines(byCur, key) {
   return Object.keys(CURS).filter((c) => byCur[c]?.[key]).map((c) => fmt(byCur[c][key], c)).join(' + ');
 }
+// В какой валюте показывать итоги (выбирается кнопками над итогами)
+const finView = () => S.finView || 'RUB';
 function renderFinance() {
   const key = monthKey(finMonth);
   const sec = FIN_SECS.find((x) => x.id === finSec) || FIN_SECS[0];
@@ -422,59 +432,73 @@ function renderFinance() {
   $('#finMonthSwitch').classList.toggle('hidden', isShow);
   if (isShow) return;
   txUsd.sync();
-  $('#txSec').classList.toggle('hidden', finSec !== 'all');
-  $('#txCat').placeholder = sec.cat || 'Категория';
+  $('#txSecFld').classList.toggle('hidden', finSec !== 'all');
+  $('#txFormTitle').textContent = finSec === 'all' ? 'Новая запись' : `Новая запись — ${sec.name}`;
+  $('#txCatLbl').textContent = finSec === 'dev' ? 'Программист' : finSec === 'agents' ? 'Агент' : 'Категория';
+  $('#txCat').placeholder = sec.cat || 'Например, «Еда» или «Зарплата»';
   $('#finSecHint').textContent = sec.hint || '';
-  $('#finSecsCard').classList.toggle('hidden', finSec !== 'all');
   $('#finMonth').textContent = `${MONTHS[finMonth.getMonth()]} ${finMonth.getFullYear()}`;
   $('#catList').innerHTML = [...new Set(S.tx.filter((t) => finSec === 'all' || secOf(t) === finSec).map((t) => t.cat))].map((c) => `<option value="${esc(c)}">`).join('');
-  const { tx, inc, out, byCur } = monthTotals(key, finSec);
-  // «Все»: сколько ушло по каждому разделу за месяц (в рублях), включая шоу
+  const tx = monthTotals(key, finSec).tx;
+
+  // ---- Итоги: всё пересчитано в одну валюту, которую выбрали кнопками ----
+  const vc = finView();
+  const sumOf = (list) => { let total = 0, miss = false; list.forEach((t) => { const v = recConv(t, vc); if (v === null) miss = true; else total += v; }); return { total, miss }; };
+  const outs = tx.filter((t) => t.type === 'out'), ins = tx.filter((t) => t.type === 'in');
+  const o = sumOf(outs), i = sumOf(ins), bal = i.total - o.total;
+  const asWritten = (list) => { const by = {}; list.forEach((t) => (by[curOf(t)] ||= { v: 0 }).v += t.amount); return curLines(by, 'v'); };
+  const mixed = tx.some((t) => curOf(t) !== vc);
+  const ap = mixed ? '≈ ' : '';
+  $('#finSumTitle').textContent = `Итоги: ${MONTHS[finMonth.getMonth()].toLowerCase()}`;
+  $('#finSummary').innerHTML = `
+    <div class="fin-view"><span class="muted small">Считать в:</span>${Object.keys(CURS).map((c) => `<button type="button" class="sh-chip${c === vc ? ' on' : ''}" data-c="${c}">${CURS[c]}</button>`).join('')}</div>
+    <div class="sum-row"><span>Расходы</span><b class="neg">${outs.length ? ap + fmt(o.total, vc) : '—'}</b></div>
+    ${outs.length && mixed ? `<div class="muted small sum-sub">записано: ${asWritten(outs)}</div>` : ''}
+    ${ins.length ? `<div class="sum-row"><span>Доходы</span><b class="pos">${ap}${fmt(i.total, vc)}</b></div>
+      ${mixed ? `<div class="muted small sum-sub">записано: ${asWritten(ins)}</div>` : ''}
+      <div class="sum-row total"><span>Остаток</span><b class="${bal >= 0 ? 'pos' : 'neg'}">${ap}${fmt(bal, vc)}</b></div>` : ''}
+    ${o.miss || i.miss ? '<div class="muted small">Часть сумм не пересчитана: курс ЦБ ещё не загружен</div>'
+      : mixed ? `<div class="muted small fin-howto">Как пересчитано: если вы указали свой курс обмена — по нему, остальное — по курсу ЦБ${S.rates ? ` на ${fmtDate(S.rates.date)}` : ''}</div>` : ''}`;
+  $('#finSummary').querySelectorAll('[data-c]').forEach((b) => b.onclick = () => { S.finView = b.dataset.c; save(); renderFinance(); });
+
+  // ---- «Все» — расходы по разделам (включая шоу); в разделе — по категориям ----
+  const bars = (rows, onClick) => {
+    rows = rows.filter((r) => r.v > 0).sort((a, b) => b.v - a.v);
+    if (!rows.length) return '<div class="empty">Нет расходов</div>';
+    const max = rows[0].v, sum = rows.reduce((a, r) => a + r.v, 0);
+    return rows.map((r) => `<div class="bar-row"${onClick ? ` data-s="${r.id}" style="cursor:pointer"` : ''}>
+      <div class="lbl"><span>${r.name}</span><span>${ap}${fmt(r.v, vc)} · ${Math.round(r.v / sum * 100)}%</span></div>
+      <div class="bar"><div style="width:${r.v / max * 100}%"></div></div></div>`).join('');
+  };
+  $('#finSecsCard').classList.toggle('hidden', finSec !== 'all');
+  $('#finCatsCard').classList.toggle('hidden', finSec === 'all');
   if (finSec === 'all') {
-    const rows = FIN_SECS.filter((x) => x.id !== 'all').map((x) => {
-      const v = x.id === 'show'
-        ? showData().items.filter((i) => i.date.startsWith(key)).reduce((a, i) => a + (recConv(i, 'RUB') ?? 0), 0)
-        : S.tx.filter((t) => t.type === 'out' && t.date.startsWith(key) && secOf(t) === x.id).reduce((a, t) => a + recRub(t), 0);
-      return { x, v };
-    });
-    const max = Math.max(...rows.map((r) => r.v));
-    $('#finSecs').innerHTML = max ? rows.filter((r) => r.v).sort((a, b) => b.v - a.v).map(({ x, v }) => `
-      <div class="bar-row" data-s="${x.id}" style="cursor:pointer"><div class="lbl"><span>${x.name}</span><span>≈ ${fmt(v)}</span></div>
-      <div class="bar"><div style="width:${v / max * 100}%"></div></div></div>`).join('') : '<div class="empty">Нет расходов</div>';
+    $('#finSecs').innerHTML = bars(FIN_SECS.filter((x) => x.id !== 'all').map((x) => ({
+      id: x.id, name: x.name,
+      v: x.id === 'show'
+        ? showData().items.filter((it) => it.date.startsWith(key)).reduce((a, it) => a + (recConv(it, vc) ?? 0), 0)
+        : S.tx.filter((t) => t.type === 'out' && t.date.startsWith(key) && secOf(t) === x.id).reduce((a, t) => a + (recConv(t, vc) ?? 0), 0),
+    })), true);
     $('#finSecs').querySelectorAll('[data-s]').forEach((el) => el.onclick = () => setFinSec(el.dataset.s));
+  } else {
+    const cats = {};
+    outs.forEach((t) => cats[t.cat] = (cats[t.cat] || 0) + (recConv(t, vc) ?? 0));
+    $('#finCats').innerHTML = bars(Object.entries(cats).map(([name, v]) => ({ name: esc(name), v })));
   }
-  const bal = inc - out;
-  const curs = Object.keys(CURS).filter((c) => byCur[c]);
-  const multi = curs.length > 1 || (curs.length === 1 && curs[0] !== 'RUB');
-  const rateNote = S.rates ? `Курс ЦБ на ${fmtDate(S.rates.date)}: $ = ${fmt(S.rates.USD)}, € = ${fmt(S.rates.EUR)}${S.rates.AZN ? `, ₼ = ${fmt(S.rates.AZN)}` : ''}${S.rates.TRY ? `, ₺ = ${fmt(S.rates.TRY)}` : ''}` : 'Курс ЦБ пока не загружен';
-  $('#finSummary').innerHTML = (multi ? `
-    <table class="cur-table"><tr><th></th>${curs.map((c) => `<th>${CURS[c]}</th>`).join('')}</tr>
-      <tr><td>Доходы</td>${curs.map((c) => `<td class="pos">${byCur[c].inc ? fmt(byCur[c].inc, c) : '—'}</td>`).join('')}</tr>
-      <tr><td>Расходы</td>${curs.map((c) => `<td class="neg">${byCur[c].out ? fmt(byCur[c].out, c) : '—'}</td>`).join('')}</tr>
-      <tr><td>Остаток</td>${curs.map((c) => { const b = byCur[c].inc - byCur[c].out; return `<td class="${b >= 0 ? 'pos' : 'neg'}">${fmt(b, c)}</td>`; }).join('')}</tr>
-    </table>
-    <div class="sum-row total"><span>Итого в рублях ≈</span><b class="${bal >= 0 ? 'pos' : 'neg'}">${fmt(bal)}</b></div>
-    <div class="muted small">${rateNote}</div>` : `
-    <div class="sum-row"><span>Доходы</span><b class="pos">${fmt(inc)}</b></div>
-    <div class="sum-row"><span>Расходы</span><b class="neg">${fmt(out)}</b></div>
-    <div class="sum-row"><span>Остаток</span><b class="${bal >= 0 ? 'pos' : 'neg'}">${fmt(bal)}</b></div>`);
-  const cats = {};
-  tx.filter((t) => t.type === 'out').forEach((t) => cats[t.cat] = (cats[t.cat] || 0) + recRub(t));
-  const sorted = Object.entries(cats).sort((a, b) => b[1] - a[1]);
-  $('#finCats').innerHTML = sorted.length ? sorted.map(([c, v]) => `
-    <div class="bar-row"><div class="lbl"><span>${esc(c)}</span><span>${fmt(v)} · ${Math.round(v / out * 100)}%</span></div>
-    <div class="bar"><div style="width:${v / sorted[0][1] * 100}%"></div></div></div>`).join('') : '<div class="empty">Нет расходов</div>';
+
+  // ---- Операции: две строки — что и сколько; дата, раздел и как оплачено ----
   const list = $('#txList'); list.innerHTML = '';
-  if (!tx.length) list.innerHTML = `<li class="empty">Нет операций${finSec === 'all' ? '' : ' в этом разделе'} в этом месяце</li>`;
+  if (!tx.length) list.innerHTML = `<li class="empty">Нет записей${finSec === 'all' ? '' : ' в этом разделе'} за этот месяц</li>`;
   tx.sort((a, b) => b.date.localeCompare(a.date)).forEach((t) => {
+    const c = curOf(t), other = c !== vc && usdOfRec(t) === null ? recConv(t, vc) : null;
     const li = document.createElement('li');
-    li.innerHTML = `<span class="badge">${fmtDate(t.date)}</span>
-      <span class="grow">${esc(t.cat)}${t.note ? ` <span class="muted">— ${esc(t.note)}</span>` : ''}${finSec === 'all' && secOf(t) ? ` <span class="muted small">· ${secName(secOf(t))}</span>` : ''}</span>
-      <b class="${t.type === 'in' ? 'pos' : 'neg'}">${t.type === 'in' ? '+' : '−'}${fmt(t.amount, curOf(t))}</b>
-      ${usdNote(t)}
-      ${curOf(t) !== 'RUB' && recConv(t, 'RUB') !== null ? `<span class="muted small">≈ ${fmt(recRub(t))}</span>` : ''}
-      <button class="del">✕</button>`;
-    li.querySelector('.del').onclick = () => { S.tx = S.tx.filter((x) => x !== t); save(); renderFinance(); };
+    li.className = 'tx-row';
+    li.innerHTML = `<div class="tx-main">
+        <div class="tx-top"><span class="tx-cat">${esc(t.cat)}</span><b class="tx-sum ${t.type === 'in' ? 'pos' : 'neg'}">${t.type === 'in' ? '+' : '−'}${fmt(t.amount, c)}</b></div>
+        <div class="muted small">${fmtDate(t.date)}${finSec === 'all' && secOf(t) ? ` · ${secName(secOf(t))}` : ''}${t.note ? ` · ${esc(t.note)}` : ''}</div>
+        ${usdNote(t)}${other !== null ? `<div class="muted small">≈ ${fmt(other, vc)} по курсу ЦБ</div>` : ''}
+      </div><button class="del" title="Удалить">✕</button>`;
+    li.querySelector('.del').onclick = () => { if (!confirm('Удалить эту запись?')) return; S.tx = S.tx.filter((x) => x !== t); save(); renderFinance(); };
     list.appendChild(li);
   });
 }

@@ -866,3 +866,30 @@ code { border-radius: 8px; }
 .usd-rate { max-width: 230px; }
 .usd-note { white-space: nowrap; }
 #finShow > .page-head h2 { margin: 0; font-size: 1.25rem; }
+
+/* Финансы: понятная форма с подписями */
+.fin-form { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.fin-form h3 { margin: 0 0 2px; }
+.fin-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.fld { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1 1 120px; }
+.fin-form > .fld { flex: none; }
+.fld.grow { flex: 2 1 150px; }
+.fld > span { font-size: 12.5px; color: var(--muted); font-weight: 600; padding-left: 4px; }
+.fld input, .fld select { width: 100%; }
+.usd-on { align-self: flex-start; }
+.usd-box { background: var(--panel-2); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.usd-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.usd-line input { width: 110px; flex: none; background: var(--panel); }
+.fin-form > button { align-self: stretch; }
+.sh-form .usd-on, .sh-form .usd-box { flex-basis: 100%; }
+/* Итоги */
+.fin-view { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.fin-view .sh-chip { padding: 4px 11px; }
+.sum-sub { margin: -4px 0 6px; text-align: right; }
+.fin-howto { margin-top: 8px; }
+/* Строки операций */
+.list li.tx-row { align-items: flex-start; }
+.tx-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tx-top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.tx-cat { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.tx-sum { white-space: nowrap; flex: none; }
