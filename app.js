@@ -390,6 +390,8 @@ const FLAG_BODY = {
   TR: `<rect width="30" height="20" fill="#e30a17"/><circle cx="11" cy="10" r="5" fill="#fff"/><circle cx="12.25" cy="10" r="4" fill="#e30a17"/><polygon points="${starPts(17.3, 10, 2.1, 5, 180)}" fill="#fff"/>`,
   EG: '<rect width="30" height="6.67" fill="#ce1126"/><rect y="6.67" width="30" height="6.67" fill="#fff"/><rect y="13.33" width="30" height="6.67" fill="#000"/><path d="M15 7.6l1.6 1.2-.5 2.6h-2.2l-.5-2.6z" fill="#c09300"/>',
   CN: `<rect width="30" height="20" fill="#ee1c25"/><polygon points="${starPts(5, 5, 3)}" fill="#ffde00"/><polygon points="${starPts(10, 2, 1)}" fill="#ffde00"/><polygon points="${starPts(12, 4, 1)}" fill="#ffde00"/><polygon points="${starPts(12, 7, 1)}" fill="#ffde00"/><polygon points="${starPts(10, 9, 1)}" fill="#ffde00"/>`,
+  US: `<rect width="30" height="20" fill="#fff"/>${Array.from({ length: 7 }, (_, i) => `<rect y="${(i * 2 * 20 / 13).toFixed(2)}" width="30" height="${(20 / 13).toFixed(2)}" fill="#b22234"/>`).join('')}<rect width="13" height="10.77" fill="#3c3b6e"/>${Array.from({ length: 12 }, (_, i) => `<circle cx="${1.6 + (i % 4) * 3.2 + (Math.floor(i / 4) % 2) * 1.6}" cy="${1.8 + Math.floor(i / 4) * 3.5}" r="0.55" fill="#fff"/>`).join('')}`,
+  EU: `<rect width="30" height="20" fill="#003399"/>${Array.from({ length: 12 }, (_, i) => { const a = i * 30 * Math.PI / 180; return `<polygon points="${starPts(15 + 6 * Math.sin(a), 10 - 6 * Math.cos(a), 1.05)}" fill="#ffcc00"/>`; }).join('')}`,
 };
 const flag = (id, cls = '') => (FLAG_BODY[id] ? `<svg class="flag ${cls}" viewBox="0 0 30 20" aria-hidden="true">${FLAG_BODY[id]}</svg>` : '');
 const ctryLabel = (id) => { const c = ctryOf(id); return c ? `${flag(id)} ${c.name}` : ''; };
@@ -991,8 +993,8 @@ const CV_CURS = [
   { c: 'RUB', name: 'Российский рубль', f: 'RU' },
   { c: 'AZN', name: 'Азербайджанский манат', f: 'AZ' },
   { c: 'CNY', name: 'Китайский юань', f: 'CN' },
-  { c: 'USD', name: 'Доллар США' },
-  { c: 'EUR', name: 'Евро' },
+  { c: 'USD', name: 'Доллар США', f: 'US' },
+  { c: 'EUR', name: 'Евро', f: 'EU' },
 ];
 const cvState = () => { try { return JSON.parse(localStorage.getItem('conv.state')) || {}; } catch { return {}; } };
 const cvBadge = (x) => x.f ? flag(x.f, 'cv-flag') : `<span class="cv-cur-badge">${CURS[x.c]}</span>`;
@@ -1002,27 +1004,25 @@ function renderConverter() {
   const st = cvState(), from = st.from || 'USD';
   if (st.amt != null && document.activeElement !== $('#cvAmount')) $('#cvAmount').value = st.amt;
   const a = parseFloat(String($('#cvAmount').value).replace(',', '.')) || 0;
-  $('#cvSym').textContent = CURS[from];
-  $('#cvFrom').innerHTML = CV_CURS.map((x) => `<button type="button" class="ctry-chip${x.c === from ? ' on' : ''}" data-c="${x.c}">${cvBadge(x)}<span>${x.f ? CURS[x.c] + ' ' : ''}${x.c}</span></button>`).join('');
-  $('#cvFrom').querySelectorAll('[data-c]').forEach((b) => b.onclick = () => {
-    localStorage.setItem('conv.state', JSON.stringify({ ...cvState(), from: b.dataset.c })); renderConverter();
+  const cur = CV_CURS.find((x) => x.c === from) || CV_CURS[0];
+  $('#cvCurBtn').innerHTML = `${cvBadge(cur)}<span>${CURS[from]} ${from}</span><span class="cv-caret">▾</span>`;
+  $('#cvMenu').innerHTML = CV_CURS.map((x) => `<button type="button" class="cv-opt${x.c === from ? ' on' : ''}" data-c="${x.c}">${cvBadge(x)}<span class="cv-opt-name">${x.name}</span><span class="muted">${CURS[x.c]} ${x.c}</span></button>`).join('');
+  $('#cvMenu').querySelectorAll('[data-c]').forEach((b) => b.onclick = () => {
+    localStorage.setItem('conv.state', JSON.stringify({ ...cvState(), from: b.dataset.c }));
+    $('#cvMenu').hidden = true; renderConverter();
   });
   if (!S.rates) { $('#cvList').innerHTML = '<li class="empty">Загружаю курс ЦБ… нужен интернет</li>'; $('#cvNote').textContent = ''; return; }
   $('#cvList').innerHTML = CV_CURS.filter((x) => x.c !== from).map((x) => {
     const v = conv(a, from, x.c), one = conv(1, from, x.c);
-    return `<li class="cv-row" data-c="${x.c}" data-v="${v ?? ''}">
+    return `<li class="cv-row">
       ${cvBadge(x)}
       <div class="cv-main"><b>${x.name}</b><span class="muted small">1 ${CURS[from]} = ${one !== null ? cvRate(one) : '—'} ${CURS[x.c]}</span></div>
       <b class="cv-val">${v !== null ? cvNum(v) + ' ' + CURS[x.c] : '—'}</b></li>`;
   }).join('');
-  // нажали на валюту — пересчитать «от неё»
-  $('#cvList').querySelectorAll('.cv-row').forEach((li) => li.onclick = () => {
-    const v = parseFloat(li.dataset.v);
-    localStorage.setItem('conv.state', JSON.stringify({ from: li.dataset.c, amt: Number.isFinite(v) ? +v.toFixed(2) : a }));
-    renderConverter();
-  });
-  $('#cvNote').textContent = `Курс ЦБ РФ на ${fmtDate(S.rates.date)}. В обменнике курс обычно немного хуже. Нажмите на валюту в списке — посчитаю от неё.`;
+  $('#cvNote').textContent = `Курс ЦБ РФ на ${fmtDate(S.rates.date)}. В обменнике курс обычно немного хуже.`;
 }
+$('#cvCurBtn').onclick = (e) => { e.stopPropagation(); $('#cvMenu').hidden = !$('#cvMenu').hidden; };
+document.addEventListener('click', (e) => { if (!$('#cvMenu').hidden && !e.target.closest('#cvMenu')) $('#cvMenu').hidden = true; });
 $('#cvAmount').addEventListener('input', () => {
   localStorage.setItem('conv.state', JSON.stringify({ ...cvState(), amt: $('#cvAmount').value }));
   renderConverter();
@@ -1209,11 +1209,14 @@ let calMonth = new Date(); calMonth.setDate(1);
 let selDay = today();
 $('#calPrev').onclick = () => { calMonth.setMonth(calMonth.getMonth() - 1); renderCalendar(); };
 $('#calNext').onclick = () => { calMonth.setMonth(calMonth.getMonth() + 1); renderCalendar(); };
+$('#evH').innerHTML = '<option value="">—</option>' + Array.from({ length: 24 }, (_, h) => `<option>${String(h).padStart(2, '0')}</option>`).join('');
+$('#evM').innerHTML = Array.from({ length: 12 }, (_, m) => `<option>${String(m * 5).padStart(2, '0')}</option>`).join('');
+const evTime = () => $('#evH').value ? `${$('#evH').value}:${$('#evM').value}` : '';
 $('#eventForm').onsubmit = (e) => {
   e.preventDefault();
   const remind = $('#evRemind').checked;
-  S.events.push({ id: uid(), date: selDay, time: $('#evTime').value || '', title: $('#evTitle').value.trim(), ...(remind ? { remind: true } : {}) });
-  $('#evTitle').value = ''; $('#evTime').value = '';
+  S.events.push({ id: uid(), date: selDay, time: evTime(), title: $('#evTitle').value.trim(), ...(remind ? { remind: true } : {}) });
+  $('#evTitle').value = ''; $('#evH').value = ''; $('#evM').value = '00';
   save(); renderCalendar();
   if (remind) askNotifyPermission();
   remSync(); checkReminders();
@@ -1690,6 +1693,7 @@ function renderGmailState(st) {
          <div class="row-form"><button id="mailOn">Подключить почту</button><button class="ghost" id="gmOff">Выйти из Google</button></div>`;
     box.innerHTML = st.needLogin
       ? `<p class="neg">⚠️ Вход Google истёк${st.email ? ` (<b>${esc(st.email)}</b>)` : ''} — почта и копия в Google не обновляются.</p>
+         ${st.authErr ? `<p class="muted small">Сам продлить не получилось (Google: ${esc(st.authErr)}).</p>` : ''}
          <div class="row-form"><button id="gmAgain">Войти снова</button></div>${err}${mail}`
       : `<p>✅ Вход выполнен${st.email ? `: <b>${esc(st.email)}</b>` : ''}</p>${err}${mail}`;
     $('#gmAgain')?.addEventListener('click', loginAgain);

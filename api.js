@@ -6,6 +6,8 @@
   const CFG = window.MOBILE_CONFIG || {};
   const KEY = 'dashboard.v1';
   const TOK = 'mobile.token';
+  const AUTH_ERR = 'mobile.authErr';  // почему Google не продлил вход сам: {e, at}
+  const authErr = () => { try { return JSON.parse(localStorage.getItem(AUTH_ERR)); } catch { return null; } };
   // Вход — только почта-адрес и скрытая папка на Диске (обычный доступ, без предупреждений Google).
   // Чтение Gmail — отдельно, по кнопке «Подключить почту» (у Google это «особый» доступ).
   const BASE_SCOPES = ['openid', 'email', 'https://www.googleapis.com/auth/drive.appdata'];
@@ -28,8 +30,9 @@
         t: p.get('access_token'), exp: Date.now() + (+p.get('expires_in') || 3600) * 1000 - 60000,
         scope: p.get('scope') || '', ever: true,
       }));
+      localStorage.removeItem(AUTH_ERR);
     } else if (p.get('error')) {
-      sessionStorage.setItem('mobile.authError', p.get('error'));
+      localStorage.setItem(AUTH_ERR, JSON.stringify({ e: p.get('error'), at: Date.now() }));
       // тихое продление не удалось (нужно подтвердить вход) — покажем кнопку «Войти»
       const old = tok(); if (old) { old.exp = 0; localStorage.setItem(TOK, JSON.stringify(old)); }
     }
@@ -49,15 +52,20 @@
       client_id: CFG.clientId, redirect_uri: redirectUri(), response_type: 'token',
       scope: granted || [...BASE_SCOPES, ...(mailWanted() ? [MAIL_SCOPE] : [])].join(' '), include_granted_scopes: 'true',
     });
+    // Если в телефоне несколько аккаунтов Google, без подсказки Google не знает, какой взять, и не продлевает вход сам
+    const hint = localStorage.getItem('mobile.email');
+    if (hint) q.set('login_hint', hint);
     if (silent) q.set('prompt', 'none');
     sessionStorage.setItem('mobile.silentTry', String(Date.now()));
     location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + q;
   }
-  // Токен истёк, а вход уже был — тихо продлить (страница на миг перезагрузится). Не чаще раза в 2 минуты.
-  function renewIfNeeded() {
-    if (tokenValid() || !everConnected() || !CFG.clientId) return false;
-    const last = +sessionStorage.getItem('mobile.silentTry') || 0;
-    if (Date.now() - last < 120000 || sessionStorage.getItem('mobile.authError')) return false;
+  // Токен скоро истечёт (или истёк), а вход уже был — тихо продлить (страница на миг перезагрузится).
+  // Не чаще раза в 2 минуты; если Google отказал — снова пробуем через 20 минут, а не никогда.
+  function renewIfNeeded(aheadMs = 0) {
+    const t = tok();
+    if (!everConnected() || !CFG.clientId || (t && t.t && t.exp - Date.now() > aheadMs)) return false;
+    const last = +sessionStorage.getItem('mobile.silentTry') || 0, err = authErr();
+    if (Date.now() - last < 120000 || (err && Date.now() - err.at < 20 * 60000)) return false;
     if (pending()) localStorage.setItem(KEY + '.unsent', '1');
     signIn(true);
     return true;
@@ -213,13 +221,13 @@
     // connected — вход в Google выполнен; mail — почта подключена (отдельной кнопкой)
     gmail_status: async () => {
       await loadEmail();
-      return { hasClient: !!CFG.clientId, connected: tokenValid() || everConnected(), needLogin: needLogin(), email, drive: hasScope('drive.appdata'),
+      return { hasClient: !!CFG.clientId, connected: tokenValid() || everConnected(), needLogin: needLogin(), authErr: needLogin() ? authErr()?.e || '' : '', email, drive: hasScope('drive.appdata'),
                mail: mailWanted() && (hasScope('gmail.readonly') || !tokenValid()) };
     },
     gmail_choose_client_file: async () => api.gmail_status(),
-    gmail_connect: async () => { sessionStorage.removeItem('mobile.authError'); signIn(false); return new Promise(() => {}); },
+    gmail_connect: async () => { localStorage.removeItem(AUTH_ERR); signIn(false); return new Promise(() => {}); },
     gmail_disconnect: async () => { localStorage.removeItem(TOK); localStorage.removeItem('mobile.email'); localStorage.removeItem(MAIL_ON); email = ''; exCache = { t: 0, data: null }; return api.gmail_status(); },
-    mail_connect: async () => { localStorage.setItem(MAIL_ON, '1'); sessionStorage.removeItem('mobile.authError'); signIn(false); return new Promise(() => {}); },
+    mail_connect: async () => { localStorage.setItem(MAIL_ON, '1'); localStorage.removeItem(AUTH_ERR); signIn(false); return new Promise(() => {}); },
     mail_disconnect: async () => { localStorage.setItem(MAIL_ON, '0'); exCache = { t: 0, data: null }; return api.gmail_status(); },
     gmail_unread: async () => {
       if (!mailWanted()) return { connected: false, signedIn: tokenValid() || everConnected() };
@@ -323,11 +331,20 @@
   document.documentElement.classList.add('is-mobile-app');
 
   // Открыли приложение после перерыва: продлить вход и отправить то, что не успело уйти
-  if (!renewIfNeeded() && tokenValid() && localStorage.getItem(KEY + '.unsent') === '1') setTimeout(push, 1500);
+  // Продлеваем заранее — за 10 минут до конца часа, чтобы вход не истекал посреди работы
+  if (!renewIfNeeded(10 * 60000) && tokenValid() && localStorage.getItem(KEY + '.unsent') === '1') setTimeout(push, 1500);
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) { if (pendingData !== null) push(); return; }
-    renewIfNeeded();
+    renewIfNeeded(10 * 60000);
   });
+  // Приложение долго открыто: когда час прошёл — продлить, но не пока человек что-то вписывает
+  setInterval(() => {
+    if (document.hidden || tokenValid()) return;
+    const a = document.activeElement;
+    if (a && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) return;
+    if (document.querySelector('.modal:not([hidden]), .rep-modal:not([hidden])')) return;
+    renewIfNeeded();
+  }, 60000);
 
   // Работа без интернета и установка на экран телефона
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});

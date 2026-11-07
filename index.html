@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Мой дашборд</title>
-<link rel="stylesheet" href="style.css?v=20261107221644">
+<link rel="stylesheet" href="style.css?v=20261108004120">
 <meta name="theme-color" content="#171412">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
@@ -361,7 +361,7 @@
         <form id="eventForm" class="col-form">
           <textarea id="evTitle" rows="2" placeholder="Заметка: что сделать или о чём напомнить" required></textarea>
           <div class="ev-row">
-            <label class="fld"><span>Время</span><input id="evTime" type="time"></label>
+            <div class="fld"><span>Время</span><div class="tm-pick"><select id="evH" aria-label="Часы"></select><b>:</b><select id="evM" aria-label="Минуты"></select></div></div>
             <label class="check ev-rem"><input type="checkbox" id="evRemind" checked> 🔔 Напомнить</label>
           </div>
           <div class="muted small" id="evHint">Без времени — напомню в 9:00 этого дня. Заметка хранится, пока вы её не удалите.</div>
@@ -383,9 +383,9 @@
     <div class="card cv-card">
       <div class="cv-input">
         <input id="cvAmount" type="number" step="any" min="0" inputmode="decimal" placeholder="Сумма" value="100">
-        <span id="cvSym" class="cv-sym"></span>
+        <button type="button" id="cvCurBtn" class="cv-cur-btn" aria-label="Из какой валюты"></button>
       </div>
-      <div class="cv-from" id="cvFrom"></div>
+      <div class="cv-menu" id="cvMenu" hidden></div>
       <ul class="list cv-list" id="cvList"></ul>
       <div class="muted small" id="cvNote"></div>
     </div>
@@ -537,9 +537,9 @@
     <div class="muted small" id="repMsg"></div>
   </div>
 </div>
-<script>window.APP_BUILD="07.11.2026 22:16";</script>
-<script src="config.js?v=20261107221644"></script>
-<script src="api.js?v=20261107221644"></script>
-<script src="app.js?v=20261107221644"></script>
+<script>window.APP_BUILD="08.11.2026 00:41";</script>
+<script src="config.js?v=20261108004120"></script>
+<script src="api.js?v=20261108004120"></script>
+<script src="app.js?v=20261108004120"></script>
 </body>
 </html>
