@@ -655,6 +655,263 @@ function renderWallet() {
   });
 }
 
+// ===== Отчёт о расходах в PDF («чек») =====
+// Страницы рисуются на canvas (A4), затем собираются в PDF из JPEG-картинок — без библиотек, работает офлайн.
+const REP = { W: 1240, H: 1754, M: 90, K: 1.5 }; // A4 при 150 dpi, рисуем в 1.5× для чёткости
+const repFont = (size, w = 400) => `${w} ${size}px "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
+const ddmm = (d) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
+const ddmmyy = (d) => `${ddmm(d)}.${d.slice(0, 4)}`;
+const plainName = (n) => n.replace(/^[^\p{L}\d]+/u, '').trim();
+const stripTags = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.textContent.replace(/^💱\s*/, '').trim(); };
+
+function repRange(p) {
+  const pad = (n) => String(n).padStart(2, '0'), endOf = (y, m) => `${y}-${pad(m + 1)}-${pad(new Date(y, m + 1, 0).getDate())}`;
+  const y = finMonth.getFullYear(), m = finMonth.getMonth(), now = new Date();
+  if (p === 'month') return [`${y}-${pad(m + 1)}-01`, endOf(y, m)];
+  if (p === 'prev') { const d = new Date(now.getFullYear(), now.getMonth() - 1, 1); return [`${d.getFullYear()}-${pad(d.getMonth() + 1)}-01`, endOf(d.getFullYear(), d.getMonth())]; }
+  if (p === 'year') return [`${now.getFullYear()}-01-01`, `${now.getFullYear()}-12-31`];
+  if (p === 'all') return ['0000-01-01', '9999-12-31'];
+  return [$('#repFrom').value || '0000-01-01', $('#repTo').value || '9999-12-31'];
+}
+
+// Что попадёт в отчёт: блоки (заголовки, строки, итоги) — потом раскладываются по страницам
+function repBlocks({ from, to, sec, vc }) {
+  const inR = (d) => d >= from && d <= to;
+  const spends = [];
+  if (sec !== 'show') S.tx.filter((t) => t.type === 'out' && inR(t.date) && (sec === 'all' || secOf(t) === sec))
+    .forEach((t) => spends.push({ r: t, sec: secOf(t) || 'personal', cat: t.cat || 'Без категории', note: t.note || '' }));
+  if (sec === 'all' || sec === 'show') (S.show?.items || []).filter((i) => inR(i.date))
+    .forEach((i) => spends.push({ r: i, sec: 'show', cat: shCatOf(i.cat).name, note: [i.who, i.note].filter(Boolean).join(' · ') }));
+  const incomes = sec === 'all' ? S.tx.filter((t) => t.type === 'in' && inR(t.date)) : [];
+  const fx = fxList().filter((f) => inR(f.date)).sort((a, b) => a.date.localeCompare(b.date));
+  const val = (r) => recConv(r, vc);
+  const sum = (list) => list.reduce((a, x) => a + (val(x.r || x) ?? 0), 0);
+  const written = (list) => { const by = {}; list.forEach((x) => { const r = x.r || x; (by[curOf(r)] ||= { v: 0 }).v += r.amount; }); return curLines(by, 'v'); };
+  const mixed = [...spends.map((x) => x.r), ...incomes].some((r) => curOf(r) !== vc);
+  const ap = mixed ? '≈ ' : '';
+  const total = sum(spends);
+  const own = {}; spends.forEach((x) => { const c = walletCost(x.r); if (c) Object.entries(c.parts).forEach(([k, v]) => own[k] = (own[k] || 0) + v); });
+
+  const dates = [...spends.map((x) => x.r.date), ...incomes.map((t) => t.date)].sort();
+  const realFrom = from === '0000-01-01' ? dates[0] : from, realTo = to === '9999-12-31' ? dates[dates.length - 1] : to;
+  const secTitle = sec === 'all' ? 'все разделы' : plainName(secName(sec));
+  const B = [];
+  B.push({ t: 'title', text: 'Мои расходы' });
+  B.push({ t: 'sub', text: `Период: ${realFrom ? ddmmyy(realFrom) : '—'} — ${realTo ? ddmmyy(realTo) : '—'}   ·   Раздел: ${secTitle}` });
+  B.push({ t: 'sub', text: `Сформировано: ${new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` });
+  B.push({ t: 'gap', h: 24 });
+  B.push({ t: 'boxStart' });
+  B.push({ t: 'kv', l: 'Всего расходов', r: spends.length ? ap + fmt(total, vc) : '—', big: true });
+  if (spends.length && mixed) B.push({ t: 'note', text: `записано: ${written(spends)}` });
+  B.push({ t: 'kv', l: 'Операций', r: String(spends.length) });
+  if (Object.keys(own).length) B.push({ t: 'kv', l: 'Своих денег ушло (по обменам)', r: Object.entries(own).map(([k, v]) => fmt(v, k)).join(' + ') });
+  if (incomes.length) {
+    const inc = sum(incomes);
+    B.push({ t: 'kv', l: 'Доходы', r: ap + fmt(inc, vc) });
+    B.push({ t: 'kv', l: 'Остаток', r: ap + fmt(inc - total, vc), bold: true });
+  }
+  B.push({ t: 'boxEnd' });
+
+  if (!spends.length) { B.push({ t: 'gap', h: 30 }); B.push({ t: 'note', text: 'За этот период расходов нет.' }); }
+
+  // Сводка по разделам
+  const order = FIN_SECS.filter((x) => x.id !== 'all').map((x) => x.id);
+  const groups = order.map((id) => ({ id, list: spends.filter((x) => x.sec === id) })).filter((g) => g.list.length);
+  if (groups.length > 1) {
+    B.push({ t: 'h', text: 'По разделам' });
+    groups.map((g) => ({ g, v: sum(g.list) })).sort((a, b) => b.v - a.v)
+      .forEach(({ g, v }) => B.push({ t: 'bar', l: plainName(secName(g.id)), r: `${ap}${fmt(v, vc)}  ·  ${total ? Math.round(v / total * 100) : 0}%`, p: total ? v / total : 0 }));
+  }
+
+  // Подробно: раздел → категория (с итогом) → каждая покупка
+  groups.map((g) => ({ g, v: sum(g.list) })).sort((a, b) => b.v - a.v).forEach(({ g, v: gv }) => {
+    B.push({ t: 'h', text: plainName(secName(g.id)), r: ap + fmt(gv, vc) });
+    const cats = {};
+    g.list.forEach((x) => (cats[x.cat] ||= []).push(x));
+    Object.entries(cats).map(([c, list]) => ({ c, list, v: sum(list) })).sort((a, b) => b.v - a.v).forEach(({ c, list, v }) => {
+      B.push({ t: 'cat', l: c, r: `${ap}${fmt(v, vc)}  ·  ${list.length} шт.` });
+      list.sort((a, b) => a.r.date.localeCompare(b.r.date)).forEach((x) => {
+        const r = x.r, cur = curOf(r), o = val(r), sub = stripTags(usdNote(r));
+        const r2 = cur !== vc && o !== null && !sub.includes(fmt(o, vc)) ? '≈ ' + fmt(o, vc) : '';
+        B.push({ t: 'row', d: ddmm(r.date), l: x.note || '—', r: '−' + fmt(r.amount, cur), r2, sub });
+      });
+    });
+  });
+
+  if (incomes.length) {
+    B.push({ t: 'h', text: 'Доходы', r: ap + fmt(sum(incomes), vc) });
+    incomes.sort((a, b) => a.date.localeCompare(b.date)).forEach((t) => {
+      const cur = curOf(t), o = val(t);
+      B.push({ t: 'row', d: ddmm(t.date), l: [t.cat, t.note].filter(Boolean).join(' — ') || '—', r: '+' + fmt(t.amount, cur), r2: cur !== vc && o !== null ? '≈ ' + fmt(o, vc) : '', pos: true });
+    });
+  }
+
+  if (fx.length) {
+    B.push({ t: 'h', text: 'Обмены валюты' });
+    fx.forEach((f) => B.push({ t: 'row', d: ddmm(f.date), l: `${fmt(f.fromAmt, f.fromCur)} → ${fmt(f.toAmt, f.toCur)}${f.note ? ' · ' + f.note : ''}`,
+      r: `1 ${CURS[f.fromCur]} = ${(f.toAmt / f.fromAmt).toLocaleString('ru-RU', { maximumFractionDigits: 4 })} ${CURS[f.toCur]}`, plain: true }));
+  }
+
+  if (mixed) {
+    B.push({ t: 'gap', h: 30 });
+    B.push({ t: 'note', text: `Как пересчитано в ${CURS[vc]}: покупки из обменов — по курсу вашего обмена, с галочкой «свой курс» — по вашему курсу, остальное — по курсу ЦБ${S.rates ? ` на ${ddmmyy(S.rates.date)}` : ''}.` });
+  }
+  return { blocks: B, name: `rashody_${realFrom ? realFrom.slice(0, 7) : 'pusto'}${realTo && realFrom && realTo.slice(0, 7) !== realFrom.slice(0, 7) ? '_' + realTo.slice(0, 7) : ''}.pdf` };
+}
+
+// Раскладка блоков по страницам A4 и рисование
+function repRender(blocks) {
+  const { W, H, M, K } = REP, pages = [];
+  let ctx, y, boxTop = null;
+  const INK = '#15171c', MUTED = '#6b7280', LINE = '#d9dce3', RED = '#c0392b', GREEN = '#1e8e5a', ACC = '#3b5bdb';
+  const newPage = () => {
+    const c = document.createElement('canvas'); c.width = W * K; c.height = H * K;
+    ctx = c.getContext('2d'); ctx.scale(K, K);
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H); ctx.textBaseline = 'alphabetic';
+    pages.push(c); y = M;
+    if (pages.length > 1) { ctx.font = repFont(20); ctx.fillStyle = MUTED; ctx.fillText('Мои расходы (продолжение)', M, y); y += 40; }
+  };
+  const text = (s, x, yy, font, color = INK, align = 'left') => { ctx.font = font; ctx.fillStyle = color; ctx.textAlign = align; ctx.fillText(s, x, yy); ctx.textAlign = 'left'; };
+  const wrap = (s, font, maxW) => {
+    ctx.font = font; const out = []; let line = '';
+    for (const w of String(s).split(/\s+/)) {
+      const t = line ? line + ' ' + w : w;
+      if (ctx.measureText(t).width > maxW && line) { out.push(line); line = w; } else line = t;
+    }
+    if (line) out.push(line); return out.length ? out : [''];
+  };
+  const need = (h) => { if (y + h > H - M - 30) { if (boxTop !== null) boxTop = null; newPage(); } };
+  newPage();
+  for (const b of blocks) {
+    if (b.t === 'title') { need(70); text(b.text, M, y + 46, repFont(52, 700)); y += 76; }
+    else if (b.t === 'sub') { need(34); text(b.text, M, y + 22, repFont(22), MUTED); y += 34; }
+    else if (b.t === 'gap') y += b.h;
+    else if (b.t === 'boxStart') { need(120); boxTop = y; y += 22; }
+    else if (b.t === 'boxEnd') {
+      if (boxTop !== null) { ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.setLineDash([]); ctx.strokeRect(M - 4, boxTop, W - 2 * M + 8, y - boxTop + 10); }
+      boxTop = null; y += 30;
+    }
+    else if (b.t === 'kv') {
+      const h = b.big ? 52 : 40; need(h);
+      text(b.l, M + 20, y + (b.big ? 36 : 28), repFont(b.big ? 30 : 24, b.big || b.bold ? 600 : 400));
+      text(b.r, W - M - 20, y + (b.big ? 36 : 28), repFont(b.big ? 34 : 24, 700), b.big ? RED : INK, 'right'); y += h;
+    }
+    else if (b.t === 'note') {
+      const lines = wrap(b.text, repFont(20), W - 2 * M - 40); need(lines.length * 28 + 6);
+      lines.forEach((l) => { text(l, boxTop !== null ? M + 20 : M, y + 22, repFont(20), MUTED); y += 28; }); y += 6;
+    }
+    else if (b.t === 'h') {
+      need(b.r ? 260 : 150); y += 34;
+      text(b.text, M, y + 36, repFont(34, 700));
+      if (b.r) text(b.r, W - M, y + 36, repFont(30, 700), INK, 'right');
+      y += 52; ctx.fillStyle = INK; ctx.fillRect(M, y, W - 2 * M, 3); y += 16;
+    }
+    else if (b.t === 'bar') {
+      need(66);
+      text(b.l, M, y + 26, repFont(24, 600)); text(b.r, W - M, y + 26, repFont(24), INK, 'right');
+      ctx.fillStyle = '#eef0f5'; ctx.fillRect(M, y + 38, W - 2 * M, 12);
+      ctx.fillStyle = ACC; ctx.fillRect(M, y + 38, (W - 2 * M) * Math.max(0.005, b.p), 12); y += 66;
+    }
+    else if (b.t === 'cat') {
+      need(170); y += 12;
+      ctx.fillStyle = '#f2f4f8'; ctx.fillRect(M, y, W - 2 * M, 46);
+      text(b.l, M + 14, y + 32, repFont(25, 700)); text(b.r, W - M - 14, y + 32, repFont(24, 600), INK, 'right'); y += 56;
+    }
+    else if (b.t === 'row') {
+      const rightW = 300, leftX = M + 92, maxW = W - M - rightW - leftX - 10;
+      const lines = wrap(b.l, repFont(24), maxW), subs = b.sub ? wrap(b.sub, repFont(19), W - M - leftX) : [];
+      const h = Math.max(lines.length * 32 + 8, b.r2 ? 66 : 40) + subs.length * 26 + 10;
+      need(h);
+      text(b.d, M + 6, y + 28, repFont(22), MUTED);
+      lines.forEach((l, i) => text(l, leftX, y + 28 + i * 32, repFont(24)));
+      text(b.r, W - M - 6, y + 28, repFont(24, 700), b.plain ? INK : b.pos ? GREEN : RED, 'right');
+      if (b.r2) text(b.r2, W - M - 6, y + 58, repFont(20), MUTED, 'right');
+      let yy = y + Math.max(lines.length * 32 + 8, b.r2 ? 66 : 40);
+      subs.forEach((s) => { text(s, leftX, yy + 14, repFont(19), MUTED); yy += 26; });
+      y += h; ctx.fillStyle = LINE; ctx.fillRect(M, y - 4, W - 2 * M, 1);
+    }
+  }
+  pages.forEach((c, i) => {
+    const g = c.getContext('2d'); g.font = repFont(18); g.fillStyle = MUTED; g.textAlign = 'center';
+    g.fillText(`Мой дашборд  ·  стр. ${i + 1} из ${pages.length}`, W / 2, H - M / 2); g.textAlign = 'left';
+  });
+  return pages;
+}
+
+// Сборка PDF из страниц-картинок (JPEG, DCTDecode)
+function repPdf(pages) {
+  const enc = new TextEncoder(), chunks = [], offs = [];
+  let len = 0;
+  const push = (x) => { const b = typeof x === 'string' ? enc.encode(x) : x; chunks.push(b); len += b.length; };
+  const obj = (n, body) => { offs[n] = len; push(`${n} 0 obj\n`); body(); push('\nendobj\n'); };
+  const PW = 595.28, PH = 841.89, n = pages.length;
+  push('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n');
+  obj(1, () => push('<< /Type /Catalog /Pages 2 0 R >>'));
+  obj(2, () => push(`<< /Type /Pages /Count ${n} /Kids [${pages.map((_, i) => `${3 + i * 3} 0 R`).join(' ')}] >>`));
+  pages.forEach((c, i) => {
+    const p = 3 + i * 3, bin = atob(c.toDataURL('image/jpeg', 0.9).split(',')[1]);
+    const img = new Uint8Array(bin.length); for (let k = 0; k < bin.length; k++) img[k] = bin.charCodeAt(k);
+    const content = `q ${PW} 0 0 ${PH} 0 0 cm /Im0 Do Q`;
+    obj(p, () => push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PW} ${PH}] /Resources << /XObject << /Im0 ${p + 2} 0 R >> >> /Contents ${p + 1} 0 R >>`));
+    obj(p + 1, () => push(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`));
+    obj(p + 2, () => { push(`<< /Type /XObject /Subtype /Image /Width ${c.width} /Height ${c.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${img.length} >>\nstream\n`); push(img); push('\nendstream'); });
+  });
+  const total = 3 + n * 3, xref = len;
+  push(`xref\n0 ${total}\n0000000000 65535 f \n`);
+  for (let i = 1; i < total; i++) push(String(offs[i]).padStart(10, '0') + ' 00000 n \n');
+  push(`trailer\n<< /Size ${total} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`);
+  const out = new Uint8Array(len); let o = 0; chunks.forEach((b) => { out.set(b, o); o += b.length; });
+  return out;
+}
+
+let repCache = null;
+function repOpts() {
+  const [from, to] = repRange($('#repPeriod').value);
+  return { from, to, sec: $('#repSec').value, vc: $('#repCur').value };
+}
+function repRefresh() {
+  $('#repDates').classList.toggle('hidden', $('#repPeriod').value !== 'custom');
+  const { blocks, name } = repBlocks(repOpts());
+  const pages = repRender(blocks);
+  repCache = { pages, name };
+  $('#repPreview').innerHTML = '';
+  pages.forEach((c) => { const im = new Image(); im.src = c.toDataURL('image/jpeg', 0.8); im.alt = 'Страница отчёта'; $('#repPreview').appendChild(im); });
+  $('#repMsg').textContent = `${pages.length} ${pages.length === 1 ? 'страница' : pages.length < 5 ? 'страницы' : 'страниц'} · файл ${name}`;
+}
+function repFile() {
+  const bytes = repPdf(repCache.pages);
+  return new File([bytes], repCache.name, { type: 'application/pdf' });
+}
+$('#repBtn').onclick = () => {
+  $('#repSec').innerHTML = FIN_SECS.map((x) => `<option value="${x.id}">${x.id === 'all' ? 'Все разделы' : x.name}</option>`).join('');
+  $('#repSec').value = finSec;
+  $('#repCur').innerHTML = Object.keys(CURS).map((c) => `<option value="${c}">${CURS[c]} ${CUR_GEN[c]}</option>`).join('');
+  $('#repCur').value = finView();
+  if (!$('#repFrom').value) { $('#repFrom').value = today().slice(0, 8) + '01'; $('#repTo').value = today(); }
+  $('#repModal').classList.remove('hidden');
+  $('#repShare').classList.toggle('hidden', !(navigator.canShare && navigator.canShare({ files: [new File(['x'], 'x.pdf', { type: 'application/pdf' })] })));
+  repRefresh();
+};
+['#repPeriod', '#repSec', '#repCur', '#repFrom', '#repTo'].forEach((id) => $(id).addEventListener('change', repRefresh));
+$('#repClose').onclick = () => $('#repModal').classList.add('hidden');
+$('#repModal').onclick = (e) => { if (e.target.id === 'repModal') $('#repModal').classList.add('hidden'); };
+$('#repSave').onclick = async () => {
+  const f = repFile();
+  if (API()?.save_pdf && !window.pywebview.mobile) {
+    const b64 = await new Promise((ok) => { const r = new FileReader(); r.onload = () => ok(r.result.split(',')[1]); r.readAsDataURL(f); });
+    const path = await API().save_pdf(b64, f.name);
+    $('#repMsg').textContent = path ? `Сохранено: ${path}` : 'Не сохранено';
+  } else {
+    const url = URL.createObjectURL(f);
+    const a = Object.assign(document.createElement('a'), { href: url, download: f.name });
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 30000);
+    $('#repMsg').textContent = `Готово: ${f.name} — ищите в «Загрузках» (Downloads)`;
+  }
+};
+$('#repShare').onclick = async () => {
+  try { await navigator.share({ files: [repFile()], title: 'Мои расходы' }); } catch { /* отменили */ }
+};
+
 // ===== Шоу: расходы на светодиодное шоу =====
 const SHOW_CATS = [
   { id: 'dev', icon: '👨‍💻', name: 'Программист' },

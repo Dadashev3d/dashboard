@@ -905,3 +905,13 @@ code { border-radius: 8px; }
 .wal-hist summary { cursor: pointer; font-size: 14px; padding: 4px 0; }
 .wal-hint { padding: 6px 10px; border-radius: 8px; background: var(--panel-2); }
 #fxForm.hidden, #fxAddBtn.hidden { display: none; }
+
+/* Отчёт PDF */
+.rep-open { width: 100%; margin-top: 12px; }
+.rep-modal { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,.45); display: flex; align-items: flex-start; justify-content: center; padding: 16px; overflow-y: auto; }
+.rep-modal.hidden { display: none; }
+.rep-box { width: 100%; max-width: 560px; display: flex; flex-direction: column; gap: 10px; margin: auto 0; }
+.rep-box .fld { display: flex; flex-direction: column; gap: 4px; }
+.rep-preview { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow-y: auto; background: var(--panel-2); padding: 8px; border-radius: 10px; }
+.rep-preview img { width: 100%; display: block; box-shadow: 0 1px 4px rgba(0,0,0,.25); background: #fff; }
+.rep-box > * { flex: none; }

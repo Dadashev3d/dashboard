@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Мой дашборд</title>
-<link rel="stylesheet" href="style.css?v=20261107202332">
+<link rel="stylesheet" href="style.css?v=20261107204955">
 <meta name="theme-color" content="#171412">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
@@ -256,7 +256,7 @@
       <button>Добавить</button>
     </form>
     <div class="grid">
-      <div class="card"><h3 id="finSumTitle">Итоги месяца</h3><div id="finSummary"></div></div>
+      <div class="card"><h3 id="finSumTitle">Итоги месяца</h3><div id="finSummary"></div><button type="button" class="ghost rep-open" id="repBtn">📄 Скачать отчёт PDF</button></div>
       <div class="card" id="finSecsCard"><h3>Расходы по разделам</h3><div id="finSecs"></div></div>
       <div class="card" id="finCatsCard"><h3>Расходы по категориям</h3><div id="finCats"></div></div>
     </div>
@@ -490,9 +490,27 @@
   </div>
 </div>
 
-<script>window.APP_BUILD="07.11.2026 20:23";</script>
-<script src="config.js?v=20261107202332"></script>
-<script src="api.js?v=20261107202332"></script>
-<script src="app.js?v=20261107202332"></script>
+<div id="repModal" class="rep-modal hidden">
+  <div class="rep-box card">
+    <div class="wal-head"><h3>📄 Отчёт о расходах (PDF)</h3><button type="button" class="ghost" id="repClose">✕</button></div>
+    <div class="fin-row">
+      <label class="fld"><span>Период</span><select id="repPeriod"><option value="month">Месяц на экране</option><option value="prev">Прошлый месяц</option><option value="year">Этот год</option><option value="all">Всё время</option><option value="custom">Свои даты</option></select></label>
+      <label class="fld"><span>Раздел</span><select id="repSec"></select></label>
+    </div>
+    <div class="fin-row hidden" id="repDates">
+      <label class="fld"><span>С</span><input type="date" id="repFrom"></label>
+      <label class="fld"><span>По</span><input type="date" id="repTo"></label>
+    </div>
+    <label class="fld"><span>Итоги считать в</span><select id="repCur"></select></label>
+    <div class="muted small">Так будет выглядеть файл:</div>
+    <div id="repPreview" class="rep-preview"></div>
+    <div class="fin-row"><button type="button" id="repSave">⬇️ Скачать PDF</button><button type="button" class="ghost hidden" id="repShare">📤 Отправить…</button></div>
+    <div class="muted small" id="repMsg"></div>
+  </div>
+</div>
+<script>window.APP_BUILD="07.11.2026 20:49";</script>
+<script src="config.js?v=20261107204955"></script>
+<script src="api.js?v=20261107204955"></script>
+<script src="app.js?v=20261107204955"></script>
 </body>
 </html>
