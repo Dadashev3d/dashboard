@@ -893,3 +893,15 @@ code { border-radius: 8px; }
 .tx-top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
 .tx-cat { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
 .tx-sum { white-space: nowrap; flex: none; }
+
+/* Обмен валюты */
+.wallet { display: flex; flex-direction: column; gap: 8px; }
+.wal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.wal-head h3 { margin: 0; }
+.wal-sec { font-weight: 600; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; margin-top: 6px; }
+.wal-cur, .wal-own { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: 10px; background: var(--panel-2); }
+.wal-cur .bar { margin: 2px 0; }
+.wal-warn { color: var(--warn, #c98a00); }
+.wal-hist summary { cursor: pointer; font-size: 14px; padding: 4px 0; }
+.wal-hint { padding: 6px 10px; border-radius: 8px; background: var(--panel-2); }
+#fxForm.hidden, #fxAddBtn.hidden { display: none; }

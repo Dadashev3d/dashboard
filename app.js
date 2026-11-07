@@ -42,6 +42,7 @@ async function load() {
   migrateLinks();
 }
 function save() {
+  W = null;
   S.updatedAt = Date.now(); // время правки: по нему компьютер и телефон понимают, чья копия новее
   const s = JSON.stringify(S);
   // данные из localStorage никогда не перезаписывают файл приложения
@@ -343,6 +344,11 @@ function usdField(pre) {
     wrap.classList.toggle('hidden', isUsd);
     box.classList.toggle('hidden', isUsd || !on.checked);
     sym.textContent = CURS[c];
+    const wh = $(`#${pre}WalHint`), wt = (typeof W !== 'undefined') && wallet().byTo[c];
+    wh.classList.toggle('hidden', !wt || isUsd || on.checked);
+    if (wt) wh.textContent = wt.left > 1e-9
+      ? `💱 Спишется из ваших обменов: на руках ${fmt(wt.left, c)} — сколько это в своих деньгах, посчитаю сам. Галочку ниже ставить не нужно.`
+      : `💱 Наменянные ${CURS[c]} закончились — запишите новый обмен (кнопка «Поменял деньги» вверху) или укажите курс ниже.`;
     let cb = null; try { cb = conv(1, 'USD', c); } catch { /* курс ЦБ ещё не загружен */ }
     const a = num2(amt.value), r = num2(inp.value);
     calc.textContent = a > 0 && r > 0
@@ -401,9 +407,26 @@ async function loadRates() {
 // Запись, оплаченная долларами по своему курсу: сколько это в долларах
 const usdOfRec = (t) => (t.usdRate > 0 && curOf(t) !== 'USD' ? t.amount / t.usdRate : null);
 // Перевод записи в валюту: по своему курсу обмена, если он записан, иначе по курсу ЦБ
-const recConv = (t, to) => { const u = usdOfRec(t); return u === null ? conv(t.amount, curOf(t), to) : conv(u, 'USD', to); };
+const recConv = (t, to) => {
+  const u = usdOfRec(t);
+  if (u !== null) return conv(u, 'USD', to);
+  const c = walletCost(t);
+  if (!c) return conv(t.amount, curOf(t), to);
+  let sum = 0;
+  for (const [k, v] of Object.entries(c.parts)) { const x = conv(v, k, to); if (x === null) return null; sum += x; }
+  if (c.short) { const x = conv(c.short, curOf(t), to); if (x === null) return null; sum += x; }
+  return sum;
+};
+// Пересчитано не по ЦБ, а по реальному курсу (свой курс или обмен)
+const ownRate = (t) => usdOfRec(t) !== null || (walletCost(t) && !walletCost(t).short);
 const recRub = (t) => recConv(t, 'RUB') ?? 0;
-const usdNote = (t) => { const u = usdOfRec(t); return u === null ? '' : `<div class="muted small">оплачено ${fmt(u, 'USD')} · курс 1 $ = ${fmt(t.usdRate, curOf(t))}</div>`; };
+const usdNote = (t) => {
+  const u = usdOfRec(t);
+  if (u !== null) return `<div class="muted small">оплачено ${fmt(u, 'USD')} · курс 1 $ = ${fmt(t.usdRate, curOf(t))}</div>`;
+  const c = walletCost(t);
+  if (!c) return '';
+  return `<div class="muted small wal-note">💱 из обмена: ${walletText(c)} · ${walletRate(c, curOf(t))}${c.short ? ` · ещё ${fmt(c.short, curOf(t))} сверх обменов` : ''}</div>`;
+};
 
 const monthKey = (d) => iso(d).slice(0, 7);
 function monthTotals(key, sec = 'all') {
@@ -430,6 +453,7 @@ function renderFinance() {
   $('#finTx').classList.toggle('hidden', isShow);
   $('#finShow').classList.toggle('hidden', !isShow);
   $('#finMonthSwitch').classList.toggle('hidden', isShow);
+  renderWallet();
   if (isShow) return;
   txUsd.sync();
   $('#txSecFld').classList.toggle('hidden', finSec !== 'all');
@@ -458,7 +482,7 @@ function renderFinance() {
       ${mixed ? `<div class="muted small sum-sub">записано: ${asWritten(ins)}</div>` : ''}
       <div class="sum-row total"><span>Остаток</span><b class="${bal >= 0 ? 'pos' : 'neg'}">${ap}${fmt(bal, vc)}</b></div>` : ''}
     ${o.miss || i.miss ? '<div class="muted small">Часть сумм не пересчитана: курс ЦБ ещё не загружен</div>'
-      : mixed ? `<div class="muted small fin-howto">Как пересчитано: если вы указали свой курс обмена — по нему, остальное — по курсу ЦБ${S.rates ? ` на ${fmtDate(S.rates.date)}` : ''}</div>` : ''}`;
+      : mixed ? `<div class="muted small fin-howto">Как пересчитано: по вашим обменам и своему курсу, остальное — по курсу ЦБ${S.rates ? ` на ${fmtDate(S.rates.date)}` : ''}</div>` : ''}`;
   $('#finSummary').querySelectorAll('[data-c]').forEach((b) => b.onclick = () => { S.finView = b.dataset.c; save(); renderFinance(); });
 
   // ---- «Все» — расходы по разделам (включая шоу); в разделе — по категориям ----
@@ -490,7 +514,7 @@ function renderFinance() {
   const list = $('#txList'); list.innerHTML = '';
   if (!tx.length) list.innerHTML = `<li class="empty">Нет записей${finSec === 'all' ? '' : ' в этом разделе'} за этот месяц</li>`;
   tx.sort((a, b) => b.date.localeCompare(a.date)).forEach((t) => {
-    const c = curOf(t), other = c !== vc && usdOfRec(t) === null ? recConv(t, vc) : null;
+    const c = curOf(t), other = c !== vc && !ownRate(t) ? recConv(t, vc) : null;
     const li = document.createElement('li');
     li.className = 'tx-row';
     li.innerHTML = `<div class="tx-main">
@@ -500,6 +524,134 @@ function renderFinance() {
       </div><button class="del" title="Удалить">✕</button>`;
     li.querySelector('.del').onclick = () => { if (!confirm('Удалить эту запись?')) return; S.tx = S.tx.filter((x) => x !== t); save(); renderFinance(); };
     list.appendChild(li);
+  });
+}
+
+// ===== Обмен валюты: «кошелёк» =====
+// Каждый обмен — пачка денег (например, 4 000 ₺ за 100 $). Расходы в этой валюте списываются
+// из пачек по очереди (сначала из самой старой). Так видно, сколько осталось на руках
+// и сколько своих денег (долларов и т. п.) реально ушло на каждую покупку.
+var W = null; // кэш расчёта; сбрасывается в save()
+const fxList = () => (S.fx ||= []);
+const allSpends = () => [
+  ...S.tx.filter((t) => t.type === 'out'),
+  ...(S.show?.items || []),
+];
+function wallet() {
+  if (W) return W;
+  const cost = new Map(); // запись → { parts: {USD: 20}, rate: {USD: 40}, short: 0 }
+  const byTo = {}; // валюта на руках → { got, spent, left, lots }
+  const byFrom = {}; // своя валюта → { gave, spent }
+  const lotsBy = {};
+  fxList().slice().sort((a, b) => a.date.localeCompare(b.date)).forEach((f) => {
+    (lotsBy[f.toCur] ||= []).push({ f, left: f.toAmt, rate: f.toAmt / f.fromAmt });
+    const t = (byTo[f.toCur] ||= { got: 0, spent: 0, left: 0, lots: [] });
+    t.got += f.toAmt;
+    (byFrom[f.fromCur] ||= { gave: 0, spent: 0, month: {} }).gave += f.fromAmt;
+  });
+  Object.entries(lotsBy).forEach(([cur, lots]) => {
+    byTo[cur].lots = lots;
+    const first = lots[0].f.date;
+    const spends = allSpends().filter((t) => curOf(t) === cur && !(t.usdRate > 0) && t.date >= first)
+      .sort((a, b) => a.date.localeCompare(b.date));
+    spends.forEach((t) => {
+      let a = t.amount;
+      const c = { parts: {}, got: {}, short: 0, lots: [] };
+      for (const lot of lots) {
+        if (a <= 1e-9) break;
+        if (lot.left <= 1e-9 || lot.f.date > t.date) continue;
+        const take = Math.min(a, lot.left);
+        lot.left -= take; a -= take;
+        const k = lot.f.fromCur, own = take / lot.rate;
+        c.parts[k] = (c.parts[k] || 0) + own;
+        c.got[k] = (c.got[k] || 0) + take;
+        c.lots.push({ take, rate: lot.rate, k });
+        const fr = byFrom[k]; fr.spent += own;
+        const m = t.date.slice(0, 7); fr.month[m] = (fr.month[m] || 0) + own;
+      }
+      c.short = a > 1e-9 ? a : 0;
+      byTo[cur].spent += t.amount - c.short;
+      if (Object.keys(c.parts).length) cost.set(t, c);
+    });
+    byTo[cur].left = lots.reduce((s, l) => s + l.left, 0);
+  });
+  return (W = { cost, byTo, byFrom });
+}
+// Сколько своих денег ушло на запись (по обменам): «20 $» или «20 $ + 500 ₽»
+const walletCost = (t) => wallet().cost.get(t) || null;
+const walletText = (c) => Object.entries(c.parts).map(([k, v]) => fmt(v, k)).join(' + ');
+const walletRate = (c, cur) => {
+  const r = (v) => v.toLocaleString('ru-RU', { maximumFractionDigits: 2 });
+  return c.lots.length > 1
+    ? 'из разных обменов: ' + c.lots.map((l) => `${fmt(l.take, cur)} по ${r(l.rate)}`).join(' + ')
+    : `1 ${CURS[c.lots[0].k]} = ${r(c.lots[0].rate)} ${CURS[cur]}`;
+};
+
+$('#fxDate').value = today();
+const fxNum = (id) => parseFloat(String($(id).value).replace(',', '.'));
+function fxCalc() {
+  const a = fxNum('#fxFrom'), b = fxNum('#fxTo'), fc = $('#fxFromCur').value, tc = $('#fxToCur').value;
+  $('#fxCalc').textContent = fc === tc ? 'Выберите разные валюты'
+    : a > 0 && b > 0 ? `Курс: 1 ${CURS[fc]} = ${(b / a).toLocaleString('ru-RU', { maximumFractionDigits: 4 })} ${CURS[tc]}`
+    : 'Сколько отдали и сколько получили на руки — курс посчитаю сам';
+}
+['#fxFrom', '#fxTo'].forEach((id) => $(id).addEventListener('input', fxCalc));
+['#fxFromCur', '#fxToCur'].forEach((id) => $(id).addEventListener('change', fxCalc));
+const fxShow = (on) => { $('#fxForm').classList.toggle('hidden', !on); $('#fxAddBtn').classList.toggle('hidden', on); if (on) { fxCalc(); $('#fxFrom').focus(); } };
+$('#fxAddBtn').onclick = () => fxShow(true);
+$('#fxCancel').onclick = () => fxShow(false);
+$('#fxForm').onsubmit = (e) => {
+  e.preventDefault();
+  const fromAmt = fxNum('#fxFrom'), toAmt = fxNum('#fxTo'), fromCur = $('#fxFromCur').value, toCur = $('#fxToCur').value;
+  if (!(fromAmt > 0 && toAmt > 0) || fromCur === toCur) { fxCalc(); return; }
+  fxList().push({ id: uid(), date: $('#fxDate').value, fromAmt, fromCur, toAmt, toCur, note: $('#fxNote').value.trim() });
+  $('#fxFrom').value = ''; $('#fxTo').value = ''; $('#fxNote').value = '';
+  fxShow(false); save(); renderFinance(); renderShow();
+};
+let walOpen = false;
+const CUR_GEN = { RUB: 'рублей', USD: 'долларов', EUR: 'евро', AZN: 'манат', TRY: 'лир' };
+function renderWallet() {
+  const w = wallet(), key = monthKey(finMonth);
+  const tos = Object.keys(CURS).filter((c) => w.byTo[c]);
+  if (!tos.length) {
+    $('#walBody').innerHTML = '<div class="muted small">Поменяли доллары (или другую валюту)? Запишите обмен — расходы в этой валюте будут списываться из него, и я буду считать, сколько у вас осталось на руках и сколько долларов вы уже потратили.</div>';
+    return;
+  }
+  const hand = tos.map((c) => {
+    const t = w.byTo[c], pct = t.got ? Math.max(0, t.left) / t.got * 100 : 0;
+    const back = t.lots.filter((l) => l.left > 1e-9).reduce((o, l) => { o[l.f.fromCur] = (o[l.f.fromCur] || 0) + l.left / l.rate; return o; }, {});
+    const backTxt = Object.entries(back).map(([k, v]) => fmt(v, k)).join(' + ');
+    return `<div class="wal-cur">
+      <div class="sum-row"><span>Осталось ${CUR_GEN[c]}</span><b class="${t.left > 1e-9 ? 'pos' : 'neg'}">${fmt(Math.max(0, t.left), c)}</b></div>
+      <div class="bar"><div style="width:${pct}%"></div></div>
+      <div class="muted small">получено ${fmt(t.got, c)} · потрачено ${fmt(t.spent, c)}${backTxt ? ` · это ${backTxt} по курсу обмена` : ''}</div>
+    </div>`;
+  }).join('');
+  const froms = Object.keys(CURS).filter((c) => w.byFrom[c]);
+  const own = froms.map((c) => {
+    const f = w.byFrom[c], m = f.month[key] || 0;
+    return `<div class="wal-own">
+      <div class="sum-row"><span>Потрачено ${CURS[c]} всего</span><b class="neg">${fmt(f.spent, c)}</b></div>
+      <div class="muted small">поменяли ${fmt(f.gave, c)} · ещё не потрачено ${fmt(Math.max(0, f.gave - f.spent), c)}${m ? ` · за ${MONTHS[finMonth.getMonth()].toLowerCase()} ${fmt(m, c)}` : ''}</div>
+    </div>`;
+  }).join('');
+  const short = [...w.cost.values()].some((c) => c.short) || allSpends().some((t) => w.byTo[curOf(t)] && !(t.usdRate > 0) && !w.cost.get(t) && t.date >= w.byTo[curOf(t)].lots[0].f.date);
+  const hist = fxList().slice().sort((a, b) => b.date.localeCompare(a.date)).map((f) => {
+    const lot = w.byTo[f.toCur].lots.find((l) => l.f === f), left = lot ? lot.left : f.toAmt;
+    return `<li class="tx-row"><div class="tx-main">
+      <div class="tx-top"><span class="tx-cat">${fmt(f.fromAmt, f.fromCur)} → ${fmt(f.toAmt, f.toCur)}</span><b class="tx-sum ${left > 1e-9 ? 'pos' : 'muted'}">${left > 1e-9 ? 'осталось ' + fmt(left, f.toCur) : 'закончились'}</b></div>
+      <div class="muted small">${fmtDate(f.date)} · 1 ${CURS[f.fromCur]} = ${(f.toAmt / f.fromAmt).toLocaleString('ru-RU', { maximumFractionDigits: 4 })} ${CURS[f.toCur]}${f.note ? ` · ${esc(f.note)}` : ''}</div>
+    </div><button class="del" data-fx="${f.id}" title="Удалить">✕</button></li>`;
+  }).join('');
+  $('#walBody').innerHTML = `
+    <div class="wal-sec">На руках</div>${hand}
+    <div class="wal-sec">Сколько своих денег ушло</div>${own}
+    ${short ? '<div class="muted small wal-warn">⚠️ Часть расходов больше, чем вы наменяли — их посчитал по курсу ЦБ. Запишите следующий обмен, чтобы счёт был точным.</div>' : ''}
+    <details class="wal-hist"${walOpen ? ' open' : ''}><summary>История обменов (${fxList().length})</summary><ul class="list">${hist}</ul></details>`;
+  $('#walBody').querySelector('details').ontoggle = (e) => { walOpen = e.target.open; };
+  $('#walBody').querySelectorAll('[data-fx]').forEach((b) => b.onclick = () => {
+    if (!confirm('Удалить этот обмен?')) return;
+    S.fx = fxList().filter((f) => f.id !== b.dataset.fx); save(); renderFinance(); renderShow();
   });
 }
 
@@ -1376,7 +1528,7 @@ document.querySelector('.file-btn').onclick = async (e) => {
 const fmtWhen = (isoStr) => new Date(isoStr).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
 // имя не считаем: на новом компьютере его вводят первым делом, а копию предложить всё равно нужно
 const isEmptyData = () => !S.tasks.length && !S.tx.length && !S.notes.length && !S.habits.length
-  && !S.events.length && !(S.show?.items?.length);
+  && !S.events.length && !(S.show?.items?.length) && !(S.fx?.length);
 async function renderCloud(msg = '') {
   const box = $('#cloudState');
   if (!API()) { box.innerHTML = '<p class="muted">Работает в установленной программе «Мой дашборд».</p>'; return null; }
