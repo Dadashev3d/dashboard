@@ -305,6 +305,11 @@
         if (Notification.permission === 'default' && opts.ask) await Notification.requestPermission();
         if (opts.sound && navigator.vibrate) navigator.vibrate([300, 150, 300]);
         if (Notification.permission !== 'granted') return { ok: false };
+        if (opts.reminder) try {
+          const c = await caches.open('mydashboard-rem'), r = await c.match('rem-done.json');
+          const done = new Set(r ? await r.json() : []); done.add(String(opts.tag).replace(/^rem-/, ''));
+          await c.put('rem-done.json', new Response(JSON.stringify([...done].slice(-500))));
+        } catch { /* не страшно */ }
         await reg.showNotification(title, {
           body, tag: opts.tag, renotify: !opts.silent, silent: !!opts.silent,
           icon: 'icon-192.png', badge: 'icon-192.png', vibrate: opts.sound ? [300, 150, 300] : undefined,

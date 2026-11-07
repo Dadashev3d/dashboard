@@ -932,3 +932,15 @@ code { border-radius: 8px; }
 .ctry-chip.on { border-color: var(--accent, #2bb5c4); background: var(--panel); font-weight: 600; }
 .sh-form .ctry-pick { margin: 8px 0; }
 .ctry-tabs { scrollbar-width: none; } .ctry-tabs::-webkit-scrollbar { display: none; }
+
+/* Заметки и напоминания */
+#evTitle { resize: vertical; min-height: 54px; }
+.ev-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.ev-row .fld { flex: 1 1 130px; }
+.ev-rem { padding-bottom: 10px; white-space: nowrap; }
+.ev-text { white-space: pre-wrap; word-break: break-word; }
+.rem-card { margin-top: 18px; }
+.rem-row .grow { cursor: pointer; white-space: pre-wrap; word-break: break-word; }
+.rem-row.past .grow { font-weight: 600; }
+.rem-done { padding: 4px 10px; }
+#remPerm { margin-top: 8px; }

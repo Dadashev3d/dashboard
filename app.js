@@ -1165,10 +1165,73 @@ $('#calPrev').onclick = () => { calMonth.setMonth(calMonth.getMonth() - 1); rend
 $('#calNext').onclick = () => { calMonth.setMonth(calMonth.getMonth() + 1); renderCalendar(); };
 $('#eventForm').onsubmit = (e) => {
   e.preventDefault();
-  S.events.push({ id: uid(), date: selDay, time: $('#evTime').value || '', title: $('#evTitle').value.trim() });
+  const remind = $('#evRemind').checked;
+  S.events.push({ id: uid(), date: selDay, time: $('#evTime').value || '', title: $('#evTitle').value.trim(), ...(remind ? { remind: true } : {}) });
   $('#evTitle').value = ''; $('#evTime').value = '';
   save(); renderCalendar();
+  if (remind) askNotifyPermission();
+  remSync(); checkReminders();
 };
+// ----- Напоминания -----
+// Когда сработает: дата + время (без времени — в 9:00)
+function remDue(ev) { return new Date(`${ev.date}T${ev.time || '09:00'}:00`).getTime(); }
+const REM_KEY = 'remind.notified'; // на каком устройстве уже показали (у каждого своё)
+const remNotified = () => { try { return new Set(JSON.parse(localStorage.getItem(REM_KEY)) || []); } catch { return new Set(); } };
+const remMark = (id) => { const s = remNotified(); s.add(id); localStorage.setItem(REM_KEY, JSON.stringify([...s].slice(-500))); };
+const activeRem = () => S.events.filter((ev) => ev.remind && !ev.done);
+async function askNotifyPermission() {
+  try { if ('Notification' in window && Notification.permission === 'default') await Notification.requestPermission(); } catch { /* нет — не страшно */ }
+  renderRemPerm();
+}
+function renderRemPerm() {
+  const el = $('#remPerm'); if (!el) return;
+  const mob = window.pywebview?.mobile;
+  if (mob && 'Notification' in window && Notification.permission === 'denied')
+    el.innerHTML = '⚠️ Уведомления запрещены. Разрешите их: Настройки телефона → Приложения → Мой дашборд → Уведомления.';
+  else if (mob && 'Notification' in window && Notification.permission === 'default')
+    el.innerHTML = '<button type="button" class="ghost" id="remAsk">🔔 Разрешить уведомления</button>';
+  else el.textContent = mob ? 'Уведомление придёт в назначенное время. Если приложение было закрыто, телефон может прислать его с задержкой — а при открытии приложения оно покажется сразу.'
+    : 'Уведомление Windows придёт в назначенное время, если программа запущена (можно свернуть). Если была закрыта — покажу при запуске.';
+  $('#remAsk')?.addEventListener('click', askNotifyPermission);
+}
+// Список напоминаний — для сервис-воркера телефона (он проверяет их в фоне, когда приложение закрыто)
+async function remSync() {
+  if (!window.pywebview?.mobile || !('caches' in window)) return;
+  try {
+    const c = await caches.open('mydashboard-rem');
+    const list = activeRem().map((ev) => ({ id: ev.id, title: ev.title, due: remDue(ev), time: ev.time }));
+    await c.put('rem-list.json', new Response(JSON.stringify(list), { headers: { 'Content-Type': 'application/json' } }));
+    // что уже показал сервис-воркер — не показывать второй раз
+    const r = await c.match('rem-done.json');
+    if (r) (await r.json()).forEach(remMark);
+    const reg = await navigator.serviceWorker?.ready;
+    if (reg?.periodicSync && list.length) await reg.periodicSync.register('reminders', { minInterval: 15 * 60_000 }).catch(() => {});
+  } catch { /* фон недоступен — сработает при открытии */ }
+}
+function checkReminders() {
+  const now = Date.now(), done = remNotified();
+  activeRem().filter((ev) => remDue(ev) <= now && !done.has(ev.id) && remDue(ev) > now - 3 * 864e5).forEach((ev) => {
+    remMark(ev.id);
+    notifyUser('🔔 Напоминание', `${ev.time ? ev.time + ' — ' : ''}${ev.title}`, { tag: 'rem-' + ev.id, sound: true, reminder: true });
+  });
+  renderBell();
+}
+function renderRemList() {
+  const list = activeRem().sort((a, b) => remDue(a) - remDue(b));
+  const now = Date.now();
+  $('#remList').innerHTML = list.length ? '' : '<li class="empty">Пока нет. Выберите день в календаре и добавьте заметку.</li>';
+  list.forEach((ev) => {
+    const li = document.createElement('li');
+    const past = remDue(ev) <= now;
+    li.className = 'rem-row' + (past ? ' past' : '');
+    li.innerHTML = `<span class="badge">${fmtDate(ev.date)}${ev.time ? ' ' + ev.time : ''}</span><span class="grow">${past ? '🔔 ' : ''}${esc(ev.title)}</span>
+      <button class="ghost rem-done" title="Готово — больше не напоминать">✓</button>`;
+    li.querySelector('.grow').onclick = () => { selDay = ev.date; calMonth = new Date(parseISO(ev.date)); calMonth.setDate(1); renderCalendar(); };
+    li.querySelector('.rem-done').onclick = () => { ev.done = true; save(); renderCalendar(); remSync(); };
+    $('#remList').appendChild(li);
+  });
+  renderRemPerm();
+}
 function renderCalendar() {
   $('#calMonth').textContent = `${MONTHS[calMonth.getMonth()]} ${calMonth.getFullYear()}`;
   const g = $('#calGrid');
@@ -1191,11 +1254,15 @@ function renderCalendar() {
   if (!evs.length && !tasks.length) list.innerHTML = '<li class="empty">Ничего не запланировано</li>';
   evs.forEach((ev) => {
     const li = document.createElement('li');
-    li.innerHTML = `<span class="badge">${ev.time || 'весь день'}</span><span class="grow">${esc(ev.title)}</span><button class="del">✕</button>`;
-    li.querySelector('.del').onclick = () => { S.events = S.events.filter((x) => x !== ev); save(); renderCalendar(); };
+    const st = !ev.remind ? '' : ev.done ? ' <span class="muted small">✓ готово</span>' : ` <span class="muted small">🔔 ${ev.time || '9:00'}</span>`;
+    li.innerHTML = `<span class="badge">${ev.time || 'весь день'}</span><span class="grow ev-text">${esc(ev.title)}${st}</span>
+      ${ev.remind ? `<button class="ghost rem-done" title="${ev.done ? 'Снова напоминать' : 'Готово — больше не напоминать'}">${ev.done ? '↺' : '✓'}</button>` : ''}<button class="del">✕</button>`;
+    li.querySelector('.rem-done')?.addEventListener('click', () => { ev.done = !ev.done; save(); renderCalendar(); remSync(); });
+    li.querySelector('.del').onclick = () => { if (!confirm('Удалить эту заметку?')) return; S.events = S.events.filter((x) => x !== ev); save(); renderCalendar(); remSync(); };
     list.appendChild(li);
   });
   tasks.forEach((t) => list.appendChild(taskLi(t, { compact: true })));
+  renderRemList();
 }
 
 // ===== Аналитика =====
@@ -1402,7 +1469,8 @@ function notifications() {
   return [
     ...S.tasks.filter((x) => !x.done && x.due && x.due < t).map((x) => ({ key: `late:${x.id}`, ico: '⚠️', text: `Просрочено: ${x.text}`, view: 'tasks' })),
     ...S.tasks.filter((x) => !x.done && x.due === t).map((x) => ({ key: `today:${x.id}:${t}`, ico: '📌', text: `Сегодня: ${x.text}`, view: 'tasks' })),
-    ...S.events.filter((e) => e.date === t && (!e.time || e.time >= nowHM)).map((e) => ({ key: `ev:${e.id}`, ico: '📅', text: `${e.time || 'Сегодня'} — ${e.title}`, view: 'calendar' })),
+    ...S.events.filter((e) => e.remind && !e.done && remDue(e) <= Date.now()).map((e) => ({ key: `rem:${e.id}`, ico: '🔔', text: `${fmtDate(e.date)}${e.time ? ' ' + e.time : ''} — ${e.title}`, view: 'calendar', day: e.date })),
+    ...S.events.filter((e) => e.date === t && (!e.time || e.time >= nowHM) && !(e.remind && !e.done && remDue(e) <= Date.now())).map((e) => ({ key: `ev:${e.id}`, ico: '📅', text: `${e.time || 'Сегодня'} — ${e.title}`, view: 'calendar', day: e.date })),
     ...(exData.items || []).filter((i) => exUsed(i.exchange) && i.unread && i.ts > Date.now() - 864e5 && i.kind !== 'other').slice(0, 10)
       .map((i) => ({ key: `ex:${i.source}:${i.id}`, ico: KIND[i.kind][0], text: `${EX.find((e) => e.key === i.exchange).name}: ${i.subject}`, view: 'exchanges', link: i.link })),
   ];
@@ -1425,6 +1493,7 @@ function renderBell() {
   $('#bellList').querySelectorAll('[data-i]').forEach((el) => el.onclick = () => {
     const x = list[el.dataset.i];
     if (!opened.has(x.key)) { S.bellOpened = [...opened, x.key].slice(-500); save(); }
+    if (x.day) { selDay = x.day; calMonth = new Date(parseISO(x.day)); calMonth.setDate(1); }
     if (x.link) openUrl(x.link); else go(x.view); // письмо с биржи открывается сразу
     closeBell();
   });
@@ -2006,4 +2075,7 @@ window.addEventListener('pywebviewready', () => { if (S._fromLocal) location.rel
   setInterval(loadMail, 5 * 60_000); // почта — раз в 5 минут
   setInterval(() => { loadExchanges(true); loadFl(); }, 10 * 60_000); // биржи — раз в 10 минут
   setInterval(loadRates, 3 * 3600_000); // курс ЦБ — раз в 3 часа
+  remSync().then(checkReminders);
+  setInterval(checkReminders, 30_000); // напоминания
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) remSync().then(checkReminders); });
 })();

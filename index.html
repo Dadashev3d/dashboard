@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Мой дашборд</title>
-<link rel="stylesheet" href="style.css?v=20261107213849">
+<link rel="stylesheet" href="style.css?v=20261107221050">
 <meta name="theme-color" content="#171412">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
@@ -358,12 +358,21 @@
       <div class="card">
         <h3 id="calDayLabel"></h3>
         <form id="eventForm" class="col-form">
-          <input id="evTitle" placeholder="Событие" required>
-          <input id="evTime" type="time">
-          <button>Добавить</button>
+          <textarea id="evTitle" rows="2" placeholder="Заметка: что сделать или о чём напомнить" required></textarea>
+          <div class="ev-row">
+            <label class="fld"><span>Время</span><input id="evTime" type="time"></label>
+            <label class="check ev-rem"><input type="checkbox" id="evRemind" checked> 🔔 Напомнить</label>
+          </div>
+          <div class="muted small" id="evHint">Без времени — напомню в 9:00 этого дня. Заметка хранится, пока вы её не удалите.</div>
+          <button>Сохранить заметку</button>
         </form>
         <ul id="dayEvents" class="list"></ul>
       </div>
+    </div>
+    <div class="card rem-card">
+      <h3>🔔 Все заметки с напоминанием</h3>
+      <ul id="remList" class="list"></ul>
+      <div class="muted small" id="remPerm"></div>
     </div>
   </section>
 
@@ -514,9 +523,9 @@
     <div class="muted small" id="repMsg"></div>
   </div>
 </div>
-<script>window.APP_BUILD="07.11.2026 21:38";</script>
-<script src="config.js?v=20261107213849"></script>
-<script src="api.js?v=20261107213849"></script>
-<script src="app.js?v=20261107213849"></script>
+<script>window.APP_BUILD="07.11.2026 22:10";</script>
+<script src="config.js?v=20261107221050"></script>
+<script src="api.js?v=20261107221050"></script>
+<script src="app.js?v=20261107221050"></script>
 </body>
 </html>
