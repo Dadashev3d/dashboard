@@ -856,3 +856,13 @@ code { border-radius: 8px; }
   .focus-box { box-shadow: var(--shadow-lg); }
 }
 @media (max-width: 390px) { nav.tabbar button { font-size: 9.5px; } nav.tabbar { left: 8px; right: 80px; } .fab { right: 8px; } }
+
+/* Финансы: вкладки разделов и «Платил долларами» */
+.fin-tabs { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+.fin-tabs::-webkit-scrollbar { display: none; }
+.fin-tabs button { flex: none; white-space: nowrap; }
+#finSecHint:empty { display: none; }
+.usd-on { white-space: nowrap; }
+.usd-rate { max-width: 230px; }
+.usd-note { white-space: nowrap; }
+#finShow > .page-head h2 { margin: 0; font-size: 1.25rem; }

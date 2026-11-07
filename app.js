@@ -140,6 +140,7 @@ document.querySelectorAll('nav button').forEach((b) => {
 // ===== Навигация =====
 const TAB_VIEWS = [...document.querySelectorAll('.tabbar button[data-view]')].map((b) => b.dataset.view);
 function go(view) {
+  if (view === 'show') { view = 'finance'; setFinSec('show'); } // «Шоу» — раздел внутри «Финансов»
   document.querySelectorAll('nav button[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   $('#tabMore')?.classList.toggle('active', !TAB_VIEWS.includes(view)); // раздел из «Ещё» — подсветить «Ещё»
   document.querySelectorAll('.view').forEach((v) => v.classList.toggle('active', v.id === 'view-' + view));
@@ -317,18 +318,59 @@ let finMonth = new Date(); finMonth.setDate(1);
 $('#txDate').value = today();
 $('#finPrev').onclick = () => { finMonth.setMonth(finMonth.getMonth() - 1); renderFinance(); };
 $('#finNext').onclick = () => { finMonth.setMonth(finMonth.getMonth() + 1); renderFinance(); };
+// Разделы финансов. «Шоу» — свой учёт (категории, бюджет), остальные — обычные операции с полем sec.
+const FIN_SECS = [
+  { id: 'all', name: 'Все' },
+  { id: 'show', name: '🎆 Шоу' },
+  { id: 'personal', name: '🏠 Личные', cat: 'Категория: еда, жильё, транспорт…', hint: 'Личные расходы: еда, жильё, транспорт, покупки' },
+  { id: 'work', name: '💼 Рабочие', cat: 'Категория: реклама, оборудование…', hint: 'Рабочие расходы: оборудование, реклама, сервисы, поездки' },
+  { id: 'dev', name: '👨‍💻 Программисты', cat: 'Программист (имя)', hint: 'Оплата программистам — в категории укажите имя, чтобы видеть, сколько ушло каждому' },
+  { id: 'agents', name: '🤝 Агенты', cat: 'Агент (имя)', hint: 'Оплата агентам — в категории укажите имя агента' },
+];
+let finSec = 'all';
+// Старые записи без раздела: расходы — «Личные», доходы — только во «Все»
+const secOf = (t) => t.sec ?? (t.type === 'in' ? '' : 'personal');
+const secName = (id) => FIN_SECS.find((x) => x.id === id)?.name || '';
+function setFinSec(id) { finSec = id; renderFinance(); if (id === 'show') renderShow(); }
+
+// «Платил долларами»: курс обмена, по которому меняли доллары, — сохраняется в записи
+function usdField(pre) {
+  const cur = $(`#${pre}Cur`), on = $(`#${pre}UsdOn`), inp = $(`#${pre}UsdRate`), wrap = $(`#${pre}UsdWrap`);
+  const sync = () => {
+    const c = cur.value, isUsd = c === 'USD';
+    wrap.classList.toggle('hidden', isUsd);
+    inp.classList.toggle('hidden', isUsd || !on.checked);
+    let cb = null; try { cb = conv(1, 'USD', c); } catch { /* курс ещё не загружен */ }
+    inp.placeholder = `Курс: 1 $ = ? ${CURS[c]}${cb ? ` (ЦБ ≈ ${+cb.toFixed(2)})` : ''}`;
+  };
+  cur.addEventListener('change', sync);
+  on.addEventListener('change', () => { sync(); if (on.checked) inp.focus(); });
+  // первый показ — из renderFinance/renderShow (валюты и курс к этому времени готовы)
+  return {
+    // undefined — не платил долларами; null — галочка стоит, а курс не указан
+    value: () => (on.checked && cur.value !== 'USD' ? (parseFloat(String(inp.value).replace(',', '.')) > 0 ? parseFloat(String(inp.value).replace(',', '.')) : null) : undefined),
+    reset: () => { on.checked = false; inp.value = ''; sync(); },
+    focus: () => inp.focus(),
+    sync,
+  };
+}
+const txUsd = usdField('tx');
 $('#txForm').onsubmit = (e) => {
   e.preventDefault();
+  const usdRate = txUsd.value();
+  if (usdRate === null) { alert('Укажите курс: сколько за 1 доллар'); txUsd.focus(); return; }
+  const sec = finSec === 'all' ? $('#txSec').value : finSec;
   S.tx.push({
     id: uid(), type: $('#txType').value, amount: parseFloat($('#txAmount').value), cur: $('#txCur').value,
     cat: $('#txCat').value.trim(), date: $('#txDate').value, note: $('#txNote').value.trim(),
+    ...(sec ? { sec } : {}), ...(usdRate ? { usdRate } : {}),
   });
-  $('#txAmount').value = ''; $('#txNote').value = '';
+  $('#txAmount').value = ''; $('#txNote').value = ''; txUsd.reset();
   save(); renderFinance(); renderExchanges();
 };
 
 // ----- Валюты: ₽, $, € и курс ЦБ для пересчёта в рубли -----
-const CURS = { RUB: '₽', USD: '$', EUR: '€', AZN: '₼' };
+const CURS = { RUB: '₽', USD: '$', EUR: '€', AZN: '₼', TRY: '₺' };
 const curOf = (t) => t.cur || 'RUB';
 const fmt = (n, cur = 'RUB') => n.toLocaleString('ru-RU', { maximumFractionDigits: 2 }) + ' ' + CURS[cur];
 const rate = (cur) => (cur === 'RUB' ? 1 : S.rates?.[cur] || null);
@@ -336,27 +378,34 @@ const toRub = (amount, cur) => amount * (rate(cur) ?? 0);
 // Разбирает «1500», «25$», «$25», «20 €», «20eur» → { n, cur }
 function parseMoney(s) {
   s = String(s || '').trim();
-  const cur = /\$|usd|дол/i.test(s) ? 'USD' : /€|eur|евро/i.test(s) ? 'EUR' : /₼|azn|манат/i.test(s) ? 'AZN' : 'RUB';
+  const cur = /\$|usd|дол/i.test(s) ? 'USD' : /€|eur|евро/i.test(s) ? 'EUR' : /₼|azn|манат/i.test(s) ? 'AZN' : /₺|try|лир/i.test(s) ? 'TRY' : 'RUB';
   return { n: num(s.replace(/[^\d.,\s]/g, '')), cur };
 }
 async function loadRates() {
   try {
     const j = await fetch('https://www.cbr-xml-daily.ru/daily_json.js').then((r) => r.json());
     const r1 = (c) => j.Valute[c].Value / (j.Valute[c].Nominal || 1);
-    S.rates = { USD: r1('USD'), EUR: r1('EUR'), AZN: r1('AZN'), date: j.Date.slice(0, 10) };
+    S.rates = { USD: r1('USD'), EUR: r1('EUR'), AZN: r1('AZN'), ...(j.Valute.TRY ? { TRY: r1('TRY') } : {}), date: j.Date.slice(0, 10) };
     save(); renderFinance(); renderExchanges();
   } catch { /* остаётся последний сохранённый курс */ }
 }
 
+// Запись, оплаченная долларами по своему курсу: сколько это в долларах
+const usdOfRec = (t) => (t.usdRate > 0 && curOf(t) !== 'USD' ? t.amount / t.usdRate : null);
+// Перевод записи в валюту: по своему курсу обмена, если он записан, иначе по курсу ЦБ
+const recConv = (t, to) => { const u = usdOfRec(t); return u === null ? conv(t.amount, curOf(t), to) : conv(u, 'USD', to); };
+const recRub = (t) => recConv(t, 'RUB') ?? 0;
+const usdNote = (t) => { const u = usdOfRec(t); return u === null ? '' : `<span class="muted small usd-note">💵 ${fmt(u, 'USD')} · 1 $ = ${fmt(t.usdRate, curOf(t))}</span>`; };
+
 const monthKey = (d) => iso(d).slice(0, 7);
-function monthTotals(key) {
-  const tx = S.tx.filter((t) => t.date.startsWith(key));
+function monthTotals(key, sec = 'all') {
+  const tx = S.tx.filter((t) => t.date.startsWith(key) && (sec === 'all' || secOf(t) === sec));
   const byCur = {};
   tx.forEach((t) => {
     const c = (byCur[curOf(t)] ||= { inc: 0, out: 0 });
     c[t.type === 'in' ? 'inc' : 'out'] += t.amount;
   });
-  const sumRub = (type) => tx.filter((t) => t.type === type).reduce((a, t) => a + toRub(t.amount, curOf(t)), 0);
+  const sumRub = (type) => tx.filter((t) => t.type === type).reduce((a, t) => a + recRub(t), 0);
   return { tx, inc: sumRub('in'), out: sumRub('out'), byCur };
 }
 function curLines(byCur, key) {
@@ -364,13 +413,40 @@ function curLines(byCur, key) {
 }
 function renderFinance() {
   const key = monthKey(finMonth);
+  const sec = FIN_SECS.find((x) => x.id === finSec) || FIN_SECS[0];
+  $('#finTabs').innerHTML = FIN_SECS.map((x) => `<button data-s="${x.id}" class="${x.id === finSec ? 'active' : ''}">${x.name}</button>`).join('');
+  $('#finTabs').querySelectorAll('button').forEach((b) => b.onclick = () => setFinSec(b.dataset.s));
+  const isShow = finSec === 'show';
+  $('#finTx').classList.toggle('hidden', isShow);
+  $('#finShow').classList.toggle('hidden', !isShow);
+  $('#finMonthSwitch').classList.toggle('hidden', isShow);
+  if (isShow) return;
+  txUsd.sync();
+  $('#txSec').classList.toggle('hidden', finSec !== 'all');
+  $('#txCat').placeholder = sec.cat || 'Категория';
+  $('#finSecHint').textContent = sec.hint || '';
+  $('#finSecsCard').classList.toggle('hidden', finSec !== 'all');
   $('#finMonth').textContent = `${MONTHS[finMonth.getMonth()]} ${finMonth.getFullYear()}`;
-  $('#catList').innerHTML = [...new Set(S.tx.map((t) => t.cat))].map((c) => `<option value="${esc(c)}">`).join('');
-  const { tx, inc, out, byCur } = monthTotals(key);
+  $('#catList').innerHTML = [...new Set(S.tx.filter((t) => finSec === 'all' || secOf(t) === finSec).map((t) => t.cat))].map((c) => `<option value="${esc(c)}">`).join('');
+  const { tx, inc, out, byCur } = monthTotals(key, finSec);
+  // «Все»: сколько ушло по каждому разделу за месяц (в рублях), включая шоу
+  if (finSec === 'all') {
+    const rows = FIN_SECS.filter((x) => x.id !== 'all').map((x) => {
+      const v = x.id === 'show'
+        ? showData().items.filter((i) => i.date.startsWith(key)).reduce((a, i) => a + (recConv(i, 'RUB') ?? 0), 0)
+        : S.tx.filter((t) => t.type === 'out' && t.date.startsWith(key) && secOf(t) === x.id).reduce((a, t) => a + recRub(t), 0);
+      return { x, v };
+    });
+    const max = Math.max(...rows.map((r) => r.v));
+    $('#finSecs').innerHTML = max ? rows.filter((r) => r.v).sort((a, b) => b.v - a.v).map(({ x, v }) => `
+      <div class="bar-row" data-s="${x.id}" style="cursor:pointer"><div class="lbl"><span>${x.name}</span><span>≈ ${fmt(v)}</span></div>
+      <div class="bar"><div style="width:${v / max * 100}%"></div></div></div>`).join('') : '<div class="empty">Нет расходов</div>';
+    $('#finSecs').querySelectorAll('[data-s]').forEach((el) => el.onclick = () => setFinSec(el.dataset.s));
+  }
   const bal = inc - out;
   const curs = Object.keys(CURS).filter((c) => byCur[c]);
   const multi = curs.length > 1 || (curs.length === 1 && curs[0] !== 'RUB');
-  const rateNote = S.rates ? `Курс ЦБ на ${fmtDate(S.rates.date)}: $ = ${fmt(S.rates.USD)}, € = ${fmt(S.rates.EUR)}${S.rates.AZN ? `, ₼ = ${fmt(S.rates.AZN)}` : ''}` : 'Курс ЦБ пока не загружен';
+  const rateNote = S.rates ? `Курс ЦБ на ${fmtDate(S.rates.date)}: $ = ${fmt(S.rates.USD)}, € = ${fmt(S.rates.EUR)}${S.rates.AZN ? `, ₼ = ${fmt(S.rates.AZN)}` : ''}${S.rates.TRY ? `, ₺ = ${fmt(S.rates.TRY)}` : ''}` : 'Курс ЦБ пока не загружен';
   $('#finSummary').innerHTML = (multi ? `
     <table class="cur-table"><tr><th></th>${curs.map((c) => `<th>${CURS[c]}</th>`).join('')}</tr>
       <tr><td>Доходы</td>${curs.map((c) => `<td class="pos">${byCur[c].inc ? fmt(byCur[c].inc, c) : '—'}</td>`).join('')}</tr>
@@ -383,19 +459,20 @@ function renderFinance() {
     <div class="sum-row"><span>Расходы</span><b class="neg">${fmt(out)}</b></div>
     <div class="sum-row"><span>Остаток</span><b class="${bal >= 0 ? 'pos' : 'neg'}">${fmt(bal)}</b></div>`);
   const cats = {};
-  tx.filter((t) => t.type === 'out').forEach((t) => cats[t.cat] = (cats[t.cat] || 0) + toRub(t.amount, curOf(t)));
+  tx.filter((t) => t.type === 'out').forEach((t) => cats[t.cat] = (cats[t.cat] || 0) + recRub(t));
   const sorted = Object.entries(cats).sort((a, b) => b[1] - a[1]);
   $('#finCats').innerHTML = sorted.length ? sorted.map(([c, v]) => `
     <div class="bar-row"><div class="lbl"><span>${esc(c)}</span><span>${fmt(v)} · ${Math.round(v / out * 100)}%</span></div>
     <div class="bar"><div style="width:${v / sorted[0][1] * 100}%"></div></div></div>`).join('') : '<div class="empty">Нет расходов</div>';
   const list = $('#txList'); list.innerHTML = '';
-  if (!tx.length) list.innerHTML = '<li class="empty">Нет операций в этом месяце</li>';
+  if (!tx.length) list.innerHTML = `<li class="empty">Нет операций${finSec === 'all' ? '' : ' в этом разделе'} в этом месяце</li>`;
   tx.sort((a, b) => b.date.localeCompare(a.date)).forEach((t) => {
     const li = document.createElement('li');
     li.innerHTML = `<span class="badge">${fmtDate(t.date)}</span>
-      <span class="grow">${esc(t.cat)}${t.note ? ` <span class="muted">— ${esc(t.note)}</span>` : ''}</span>
+      <span class="grow">${esc(t.cat)}${t.note ? ` <span class="muted">— ${esc(t.note)}</span>` : ''}${finSec === 'all' && secOf(t) ? ` <span class="muted small">· ${secName(secOf(t))}</span>` : ''}</span>
       <b class="${t.type === 'in' ? 'pos' : 'neg'}">${t.type === 'in' ? '+' : '−'}${fmt(t.amount, curOf(t))}</b>
-      ${curOf(t) !== 'RUB' && rate(curOf(t)) ? `<span class="muted small">≈ ${fmt(toRub(t.amount, curOf(t)))}</span>` : ''}
+      ${usdNote(t)}
+      ${curOf(t) !== 'RUB' && recConv(t, 'RUB') !== null ? `<span class="muted small">≈ ${fmt(recRub(t))}</span>` : ''}
       <button class="del">✕</button>`;
     li.querySelector('.del').onclick = () => { S.tx = S.tx.filter((x) => x !== t); save(); renderFinance(); };
     list.appendChild(li);
@@ -421,15 +498,18 @@ $('#shDate').value = today();
 $('#shPrev').onclick = () => { shMonth.setMonth(shMonth.getMonth() - 1); renderShow(); };
 $('#shNext').onclick = () => { shMonth.setMonth(shMonth.getMonth() + 1); renderShow(); };
 $('#shPeriod').onclick = (e) => { const p = e.target.closest('button')?.dataset.p; if (p) { shPeriod = p; renderShow(); } };
+let shUsd = null; // поле «Платил долларами» (создаётся, когда готова функция conv)
 $('#shForm').onsubmit = (e) => {
   e.preventDefault();
   const amount = parseFloat($('#shAmount').value);
   if (!(amount > 0)) return;
+  const usdRate = shUsd.value();
+  if (usdRate === null) { alert('Укажите курс: сколько за 1 доллар'); shUsd.focus(); return; }
   showData().items.push({
     id: uid(), cat: shCat, amount, cur: $('#shCur').value, date: $('#shDate').value,
-    who: $('#shWho').value.trim(), note: $('#shNote').value.trim(),
+    who: $('#shWho').value.trim(), note: $('#shNote').value.trim(), ...(usdRate ? { usdRate } : {}),
   });
-  $('#shAmount').value = ''; $('#shNote').value = ''; $('#shWho').value = '';
+  $('#shAmount').value = ''; $('#shNote').value = ''; $('#shWho').value = ''; shUsd.reset();
   // запись в месяце, который сейчас открыт, — чтобы сразу её увидеть
   const d = parseISO($('#shDate').value); shMonth = new Date(d.getFullYear(), d.getMonth(), 1);
   save(); renderShow();
@@ -458,8 +538,9 @@ const conv = (amount, from, to) => {
   const a = rate(from), b = rate(to);
   return a && b ? amount * a / b : null;
 };
+shUsd = usdField('sh');
 const shView = () => showData().view || 'orig'; // 'orig' — как записано, иначе код валюты
-const weightOf = (i) => conv(i.amount, curOf(i), 'RUB') ?? i.amount; // для долей и сортировки
+const weightOf = (i) => recConv(i, 'RUB') ?? i.amount; // для долей и сортировки
 // Сумма расходов для показа: «100 $ + 5 000 ₽» (как записано) или в выбранной валюте
 function shMoney(items, view = shView()) {
   const byCur = {};
@@ -468,11 +549,12 @@ function shMoney(items, view = shView()) {
   const curs = Object.keys(byCur);
   const weight = items.reduce((a, i) => a + weightOf(i), 0);
   if (view === 'orig') return { text: lines, lines, approx: false, weight };
-  const parts = items.map((i) => conv(i.amount, curOf(i), view));
+  const parts = items.map((i) => recConv(i, view));
   if (parts.some((v) => v === null)) return { text: lines, lines, approx: false, weight, noRate: true };
   return { text: fmt(parts.reduce((a, v) => a + v, 0), view), lines, approx: curs.some((c) => c !== view), weight };
 }
 function renderShow() {
+  shUsd?.sync();
   const sh = showData();
   const view = shView();
   const key = monthKey(shMonth);
@@ -531,7 +613,7 @@ function renderShow() {
     if (spent.noRate) $('#shBudget').innerHTML = `<div class="sum-row"><span>Бюджет</span><b>${fmt(sh.budget, bCur)}</b></div>
       <div class="muted small">Нужен курс ЦБ, чтобы сравнить с расходами в других валютах</div>`;
     else {
-      const used = sh.items.reduce((a, i) => a + conv(i.amount, curOf(i), bCur), 0);
+      const used = sh.items.reduce((a, i) => a + recConv(i, bCur), 0);
       const pct = Math.round(used / sh.budget * 100), left = sh.budget - used;
       $('#shBudget').innerHTML = `
         <div class="sum-row"><span>Бюджет</span><b>${fmt(sh.budget, bCur)}</b></div>
@@ -550,12 +632,13 @@ function renderShow() {
   if (!rows.length) list.innerHTML = `<li class="empty">Нет расходов${shPeriod === 'month' ? ' в этом месяце' : ''}</li>`;
   rows.forEach((i) => {
     const c = shCatOf(i.cat), cur = curOf(i);
-    const other = view !== 'orig' && cur !== view ? conv(i.amount, cur, view) : null;
+    const other = view !== 'orig' && cur !== view ? recConv(i, view) : null;
     const li = document.createElement('li');
     li.innerHTML = `<span class="badge">${fmtDate(i.date)}</span>
       <span class="sh-ico sm">${esc(c.icon)}</span>
       <span class="grow"><b>${esc(c.name)}</b>${i.note ? ` — ${esc(i.note)}` : ''}${i.who ? ` <span class="muted">· ${esc(i.who)}</span>` : ''}</span>
       <b class="neg">−${fmt(i.amount, cur)}</b>
+      ${usdNote(i)}
       ${other !== null ? `<span class="muted small">≈ ${fmt(other, view)}</span>` : ''}
       <button class="del" title="Удалить">✕</button>`;
     li.querySelector('.del').onclick = () => {

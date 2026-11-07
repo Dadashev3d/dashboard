@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Мой дашборд</title>
-<link rel="stylesheet" href="style.css?v=20261107015833">
+<link rel="stylesheet" href="style.css?v=20261107153723">
 <meta name="theme-color" content="#171412">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
@@ -29,7 +29,6 @@
     <button data-view="notes">Заметки</button>
     <button data-view="habits">Привычки</button>
     <button data-view="finance">Финансы</button>
-    <button data-view="show">Шоу</button>
     <button data-view="analytics">Аналитика</button>
     <button data-view="world">Погода и сервисы</button>
     <button data-view="settings">Настройки</button>
@@ -205,14 +204,20 @@
   <section id="view-finance" class="view">
     <header class="page-head">
       <h1>Финансы</h1>
-      <div class="month-switch">
+      <div class="month-switch" id="finMonthSwitch">
         <button id="finPrev" class="ghost">‹</button><span id="finMonth"></span><button id="finNext" class="ghost">›</button>
       </div>
     </header>
+    <div class="tabs fin-tabs" id="finTabs"></div>
+    <div id="finTx">
+    <p id="finSecHint" class="muted small"></p>
     <form id="txForm" class="row-form">
       <select id="txType"><option value="out">Расход</option><option value="in">Доход</option></select>
       <input id="txAmount" type="number" step="0.01" min="0" placeholder="Сумма" required>
-      <select id="txCur" title="Валюта"><option value="RUB">₽ рубли</option><option value="USD">$ доллары</option><option value="EUR">€ евро</option><option value="AZN">₼ манаты</option></select>
+      <select id="txCur" title="Валюта"><option value="RUB">₽ рубли</option><option value="USD">$ доллары</option><option value="EUR">€ евро</option><option value="AZN">₼ манаты</option><option value="TRY">₺ лиры</option></select>
+      <label class="check usd-on" id="txUsdWrap" title="Меняли доллары, чтобы заплатить"><input type="checkbox" id="txUsdOn"> Платил долларами</label>
+      <input id="txUsdRate" class="hidden usd-rate" type="number" step="any" min="0" placeholder="Курс: 1 $ = ?">
+      <select id="txSec" title="Раздел"><option value="personal">🏠 Личные</option><option value="work">💼 Рабочие</option><option value="dev">👨‍💻 Программисты</option><option value="agents">🤝 Агенты</option><option value="">Без раздела</option></select>
       <input id="txCat" list="catList" placeholder="Категория" required>
       <datalist id="catList"></datalist>
       <input id="txDate" type="date" required>
@@ -221,15 +226,16 @@
     </form>
     <div class="grid">
       <div class="card"><h3>Итоги месяца</h3><div id="finSummary"></div></div>
+      <div class="card" id="finSecsCard"><h3>По разделам</h3><div id="finSecs"></div></div>
       <div class="card"><h3>Расходы по категориям</h3><div id="finCats"></div></div>
     </div>
     <div class="card"><h3>Операции</h3><ul id="txList" class="list"></ul></div>
-  </section>
+    </div>
 
-  <!-- ШОУ: расходы на светодиодное шоу -->
-  <section id="view-show" class="view">
+  <!-- ШОУ: расходы на светодиодное шоу (раздел внутри «Финансов») -->
+  <div id="finShow" class="hidden">
     <header class="page-head">
-      <h1>Светодиодное шоу</h1>
+      <h2>Светодиодное шоу</h2>
       <p class="muted">Сколько уходит на программиста, агентов, материалы и всё остальное</p>
       <div class="month-switch" style="margin-left:auto">
         <button id="shPrev" class="ghost">‹</button><span id="shMonth"></span><button id="shNext" class="ghost">›</button>
@@ -244,6 +250,7 @@
         <button type="button" class="sh-chip" data-v="USD">$ в долларах</button>
         <button type="button" class="sh-chip" data-v="EUR">€ в евро</button>
         <button type="button" class="sh-chip" data-v="AZN">₼ в манатах</button>
+        <button type="button" class="sh-chip" data-v="TRY">₺ в лирах</button>
       </div>
     </div>
 
@@ -253,7 +260,9 @@
       <div class="sh-pick" id="shPick"></div>
       <div class="row-form">
         <input id="shAmount" type="number" step="0.01" min="0" placeholder="Сумма" required>
-        <select id="shCur" title="Валюта"><option value="RUB">₽ рубли</option><option value="USD">$ доллары</option><option value="EUR">€ евро</option><option value="AZN">₼ манаты</option></select>
+        <select id="shCur" title="Валюта"><option value="RUB">₽ рубли</option><option value="USD">$ доллары</option><option value="EUR">€ евро</option><option value="AZN">₼ манаты</option><option value="TRY">₺ лиры</option></select>
+        <label class="check usd-on" id="shUsdWrap" title="Меняли доллары, чтобы заплатить"><input type="checkbox" id="shUsdOn"> Платил долларами</label>
+        <input id="shUsdRate" class="hidden usd-rate" type="number" step="any" min="0" placeholder="Курс: 1 $ = ?">
         <input id="shWho" list="shWhoList" placeholder="Кому / где купил">
         <datalist id="shWhoList"></datalist>
         <input id="shDate" type="date" required>
@@ -270,7 +279,7 @@
         <div id="shBudget"></div>
         <form id="shBudgetForm" class="row-form compact">
           <input id="shBudgetInput" type="number" min="0" step="1" placeholder="Общий бюджет">
-          <select id="shBudgetCur" title="Валюта бюджета"><option value="RUB">₽</option><option value="USD">$</option><option value="EUR">€</option><option value="AZN">₼</option></select>
+          <select id="shBudgetCur" title="Валюта бюджета"><option value="RUB">₽</option><option value="USD">$</option><option value="EUR">€</option><option value="AZN">₼</option><option value="TRY">₺</option></select>
           <button>Сохранить</button>
         </form>
       </div>
@@ -292,6 +301,7 @@
         <button class="ghost">+ Категория</button>
       </form>
     </div>
+  </div>
   </section>
 
   <!-- КАЛЕНДАРЬ -->
@@ -445,9 +455,9 @@
   </div>
 </div>
 
-<script>window.APP_BUILD="07.11.2026 01:58";</script>
-<script src="config.js?v=20261107015833"></script>
-<script src="api.js?v=20261107015833"></script>
-<script src="app.js?v=20261107015833"></script>
+<script>window.APP_BUILD="07.11.2026 15:37";</script>
+<script src="config.js?v=20261107153723"></script>
+<script src="api.js?v=20261107153723"></script>
+<script src="app.js?v=20261107153723"></script>
 </body>
 </html>
