@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Мой дашборд</title>
-<link rel="stylesheet" href="style.css?v=20261108004120">
+<link rel="stylesheet" href="style.css?v=20261108153611">
 <meta name="theme-color" content="#171412">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
@@ -16,10 +16,10 @@
 <body>
 <script>(function(){var d=document.documentElement,b=document.body;d.classList.add("booting","first");try{var t=(JSON.parse(localStorage.getItem("dashboard.v1"))||{}).theme||"paper";if(t==="auto"){var h=new Date().getHours();t=(h>=7&&h<19)?"paper":"dark";}if(t!=="paper")b.dataset.theme=t;if(t==="dark"||t==="ocean")b.classList.add("is-dark");var bg={paper:"#f3f4f7",dark:"#0e0f12",ocean:"#0b141b",lavender:"#f4f2fa"}[t];if(bg){d.style.background=bg;var m=document.querySelector("meta[name=theme-color]");if(m)m.setAttribute("content",bg);}}catch(e){}setTimeout(function(){d.classList.remove("booting");},3000);["pointerdown","keydown"].forEach(function(n){addEventListener(n,function(){d.classList.remove("first");},{once:true,capture:true});});})();</script>
 <aside class="sidebar">
-  <div class="profile">
+  <button type="button" class="profile" id="profileBtn" title="Профиль">
     <div class="avatar" id="avatar">?</div>
-    <div class="profile-name" id="profileName">Гость</div>
-  </div>
+    <div class="profile-txt"><div class="profile-name" id="profileName">Гость</div><div class="profile-sub" id="profileSub">Профиль</div></div>
+  </button>
   <nav>
     <button data-view="overview" class="active">Главная</button>
     <button data-view="calendar">Календарь</button>
@@ -430,8 +430,17 @@
   <!-- НАСТРОЙКИ -->
   <section id="view-settings" class="view">
     <header class="page-head"><h1>Настройки</h1></header>
-    <div class="card">
+    <div class="card" id="profileCard">
       <h3>Профиль</h3>
+      <div class="pf-head">
+        <button type="button" class="avatar avatar-big" id="pfAvatar" title="Поменять фото">?</button>
+        <div class="pf-actions">
+          <button type="button" id="pfPhoto">📷 Загрузить фото</button>
+          <button type="button" class="ghost" id="pfPhotoDel" hidden>Убрать фото</button>
+          <div class="muted small">Фото хранится в программе и копируется в Google вместе с записями — появится и на компьютере, и на телефоне.</div>
+        </div>
+      </div>
+      <input type="file" id="pfFile" accept="image/*" hidden>
       <form id="profileForm" class="row-form">
         <input id="nameInput" placeholder="Как к вам обращаться?" required>
         <button>Сохранить</button>
@@ -537,9 +546,9 @@
     <div class="muted small" id="repMsg"></div>
   </div>
 </div>
-<script>window.APP_BUILD="08.11.2026 00:41";</script>
-<script src="config.js?v=20261108004120"></script>
-<script src="api.js?v=20261108004120"></script>
-<script src="app.js?v=20261108004120"></script>
+<script>window.APP_BUILD="08.11.2026 15:36";</script>
+<script src="config.js?v=20261108153611"></script>
+<script src="api.js?v=20261108153611"></script>
+<script src="app.js?v=20261108153611"></script>
 </body>
 </html>

@@ -1450,8 +1450,7 @@ function renderOverview() {
   $('#daySub').textContent = todayTasks || todayEv
     ? `Сегодня ${plural(todayEv, 'событие', 'события', 'событий')} и ${plural(todayTasks, 'задача', 'задачи', 'задач')}. Отличный день, чтобы делать важные дела.`
     : 'Отличный день, чтобы делать важные дела.';
-  $('#avatar').textContent = (S.name || '?')[0].toUpperCase();
-  $('#profileName').textContent = S.name || 'Гость';
+  renderProfile();
 
   // Сегодня в календаре
   const ev = S.events.filter((e) => e.date === t).sort((a, b) => a.time.localeCompare(b.time));
@@ -1949,6 +1948,45 @@ function applyExUse() {
   }
   box?.querySelectorAll('input').forEach((cb) => { cb.checked = exUsed(cb.value); });
 }
+
+// ===== Профиль: фото (аватарка) =====
+function paintAvatar(el) {
+  if (!el) return;
+  if (S.avatar) { el.style.backgroundImage = `url("${S.avatar}")`; el.classList.add('has-photo'); el.textContent = ''; }
+  else { el.style.backgroundImage = ''; el.classList.remove('has-photo'); el.textContent = (S.name || '?')[0].toUpperCase(); }
+}
+function renderProfile() {
+  paintAvatar($('#avatar')); paintAvatar($('#pfAvatar'));
+  $('#profileName').textContent = S.name || 'Гость';
+  $('#profileSub').textContent = localStorage.getItem('mobile.email') || 'Профиль';
+  $('#pfPhoto').textContent = S.avatar ? '📷 Поменять фото' : '📷 Загрузить фото';
+  $('#pfPhotoDel').hidden = !S.avatar;
+}
+// Фото обрезаем по центру в квадрат 256×256 и сжимаем — весит ~20 КБ, поэтому спокойно копируется в Google
+async function photoToAvatar(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = bad; i.src = url; });
+    const side = Math.min(img.naturalWidth, img.naturalHeight), N = 256;
+    const c = document.createElement('canvas'); c.width = c.height = N;
+    const g = c.getContext('2d'); g.imageSmoothingQuality = 'high';
+    g.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, N, N);
+    return c.toDataURL('image/jpeg', 0.85);
+  } finally { URL.revokeObjectURL(url); }
+}
+const pickPhoto = () => { $('#pfFile').value = ''; $('#pfFile').click(); };
+$('#pfPhoto').onclick = pickPhoto;
+$('#pfAvatar').onclick = pickPhoto;
+$('#pfFile').onchange = async () => {
+  const f = $('#pfFile').files[0]; if (!f) return;
+  try { S.avatar = await photoToAvatar(f); save(); renderProfile(); }
+  catch { alert('Не получилось открыть это фото. Попробуйте другое (JPG или PNG).'); }
+};
+$('#pfPhotoDel').onclick = () => { if (!confirm('Убрать фото профиля?')) return; delete S.avatar; save(); renderProfile(); };
+$('#profileBtn').onclick = () => {
+  document.body.classList.remove('menu-open');
+  go('settings'); setTimeout(() => $('#profileCard').scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+};
 
 // ===== Настройки и резервная копия =====
 $('#profileForm').onsubmit = (e) => { e.preventDefault(); S.name = $('#nameInput').value.trim(); save(); go('overview'); };
