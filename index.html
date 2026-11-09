@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Мой дашборд</title>
-<link rel="stylesheet" href="style.css?v=20261108153611">
+<link rel="stylesheet" href="style.css?v=20261110012702">
 <meta name="theme-color" content="#171412">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
@@ -45,7 +45,13 @@
   <button data-view="finance"><span class="tl">Финансы</span></button>
   <button id="tabMore" data-more="1"><span class="tl">Ещё</span></button>
 </nav>
-<button id="fabAdd" class="fab" title="Новая задача" aria-label="Новая задача"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+<div id="quickAdd" class="quick-add" hidden>
+  <button type="button" data-q="task"><span>✅</span>Задача</button>
+  <button type="button" data-q="spend"><span>💸</span>Расход</button>
+  <button type="button" data-q="note"><span>📝</span>Заметка</button>
+  <button type="button" data-q="remind"><span>🔔</span>Напоминание</button>
+</div>
+<button id="fabAdd" class="fab" title="Добавить" aria-label="Добавить"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
 
 <main>
   <!-- Верхняя панель: поиск и уведомления -->
@@ -71,6 +77,7 @@
         <p id="todayLabel" class="muted"></p>
         <h1 id="greeting">Привет!</h1>
         <p id="daySub" class="muted"></p>
+        <div class="day-progress" id="dayProgress"></div>
       </div>
       <button id="focusBtn" class="focus-btn">◎ <span>Фокус<br>на главное</span> ›</button>
     </header>
@@ -104,8 +111,8 @@
       <div class="card" data-go="world"><h3>Погода</h3><div id="ovWeather" class="big muted">—</div></div>
       <div class="card" data-go="habits"><h3>Привычки сегодня</h3><div id="ovHabits"></div></div>
       <div class="card" data-go="finance"><h3>Баланс за месяц</h3><div id="ovFinance"></div></div>
-      <div class="card" data-go="show"><h3>Шоу: расходы</h3><div id="ovShow"></div></div>
-      <div class="card" data-go="projects"><h3>Проекты</h3><div id="ovProjects"></div></div>
+      <div class="card" data-go="show" id="ovShowCard"><h3>Шоу: расходы</h3><div id="ovShow"></div></div>
+      <div class="card ov-wide" data-go="projects"><h3>Проекты</h3><div id="ovProjects"></div></div>
     </div>
 
     <div class="card">
@@ -546,9 +553,9 @@
     <div class="muted small" id="repMsg"></div>
   </div>
 </div>
-<script>window.APP_BUILD="08.11.2026 15:36";</script>
-<script src="config.js?v=20261108153611"></script>
-<script src="api.js?v=20261108153611"></script>
-<script src="app.js?v=20261108153611"></script>
+<script>window.APP_BUILD="10.11.2026 01:27";</script>
+<script src="config.js?v=20261110012702"></script>
+<script src="api.js?v=20261110012702"></script>
+<script src="app.js?v=20261110012702"></script>
 </body>
 </html>

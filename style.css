@@ -983,3 +983,51 @@ button.profile:hover { background: color-mix(in srgb, var(--side-text, #fff) 6%,
 .avatar.avatar-big { width: 96px; height: 96px; font-size: 40px; border: 0; padding: 0; cursor: pointer; color: #fff; }
 .pf-actions { flex: 1 1 200px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .pf-actions .small { line-height: 1.4; }
+
+/* ===== Обновление главной ===== */
+.day-progress { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+.day-progress:empty { display: none; }
+.day-progress > div { display: flex; flex-direction: column; gap: 1px; }
+.day-progress b { font-size: 15px; }
+.ring { width: 44px; height: 44px; transform: rotate(-90deg); flex: none; }
+.ring circle { fill: none; stroke-width: 5; stroke-linecap: round; }
+.ring-bg { stroke: color-mix(in srgb, var(--accent) 16%, transparent); }
+.ring-fg { stroke: var(--accent); transition: stroke-dasharray .5s ease; }
+.ov-habits { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.hab-chip { padding: 5px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; background: var(--panel-2); color: var(--text); border: 0; box-shadow: none; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.hab-chip.on { background: color-mix(in srgb, var(--green) 20%, transparent); color: var(--green); }
+.card.hidden { display: none; }
+
+/* Кнопка «+»: меню быстрого добавления */
+.quick-add { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; align-items: flex-end; padding: 0 16px 112px; background: rgba(10, 12, 20, .35); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); animation: qa-fade .15s ease both; }
+@keyframes qa-fade { from { opacity: 0; } }
+.quick-add button { min-width: 200px; }
+body:has(.quick-add:not([hidden])) .fab { z-index: 61; }
+.quick-add[hidden] { display: none; }
+.quick-add button { display: flex; align-items: center; gap: 10px; padding: 12px 18px 12px 14px; border-radius: 999px; border: 0;
+  background: var(--panel); color: var(--text); font-weight: 600; font-size: 16px; box-shadow: 0 8px 24px rgba(0,0,0,.18); animation: qa-in .18s ease both; }
+.quick-add button span { font-size: 20px; }
+.quick-add button:nth-child(2) { animation-delay: .03s } .quick-add button:nth-child(3) { animation-delay: .06s } .quick-add button:nth-child(4) { animation-delay: .09s }
+@keyframes qa-in { from { opacity: 0; transform: translateY(10px) scale(.96); } }
+.fab svg { transition: transform .2s ease; }
+.fab.open svg { transform: rotate(45deg); }
+
+/* Телефон: маленькие карточки — по две в ряд */
+@media (max-width: 760px) {
+  #view-overview .grid.small { grid-template-columns: 1fr 1fr; gap: 12px; }
+  #view-overview .grid.small .card { padding: 16px; min-width: 0; }
+  #view-overview .grid.small .card h3 { font-size: 13px; }
+  #view-overview .grid.small .big { font-size: 24px; }
+  #view-overview .grid.small .ov-wide { grid-column: 1 / -1; }
+  #view-overview .grid.small .card:has(.ov-habits) { grid-column: 1 / -1; }
+}
+
+/* Главная на телефоне: погода и баланс — в одну строку, широкие карточки ниже */
+@media (max-width: 760px) {
+  #view-overview .grid.small > [data-go="world"] { order: 1; }
+  #view-overview .grid.small > [data-go="finance"] { order: 2; }
+  #view-overview .grid.small > [data-go="show"] { order: 3; }
+  #view-overview .grid.small > [data-go="habits"] { order: 4; }
+  #view-overview .grid.small > [data-go="projects"] { order: 5; }
+  #view-overview .grid.small [data-go="finance"] .big { font-size: 20px; }
+}

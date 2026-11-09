@@ -158,7 +158,16 @@ document.querySelectorAll('nav button[data-view]').forEach((b) => b.onclick = ()
 document.querySelectorAll('[data-go]').forEach((c) => c.onclick = (e) => { e.stopPropagation(); go(c.dataset.go); });
 // Нижнее меню телефона: «Ещё» открывает полное меню, «+» — новая задача
 $('#tabMore').onclick = (e) => { e.stopPropagation(); document.body.classList.add('menu-open'); };
-$('#fabAdd').onclick = () => { go('tasks'); setTimeout(() => $('#taskText').focus(), 60); };
+const QUICK = {
+  task: () => { go('tasks'); setTimeout(() => $('#taskText').focus(), 60); },
+  spend: () => { go('finance'); setTimeout(() => { $('#txType').value = 'out'; $('#txForm').scrollIntoView({ behavior: 'smooth', block: 'start' }); $('#txAmount').focus(); }, 60); },
+  note: () => { go('notes'); setTimeout(() => $('#newNoteBtn').click(), 60); },
+  remind: () => { selDay = today(); go('calendar'); setTimeout(() => { $('#eventForm').scrollIntoView({ behavior: 'smooth', block: 'center' }); $('#evTitle').focus(); }, 60); },
+};
+const quickToggle = (open) => { $('#quickAdd').hidden = !open; $('#fabAdd').classList.toggle('open', open); };
+$('#fabAdd').onclick = (e) => { e.stopPropagation(); quickToggle($('#quickAdd').hidden); };
+$('#quickAdd').querySelectorAll('[data-q]').forEach((b) => b.onclick = () => { quickToggle(false); QUICK[b.dataset.q](); });
+document.addEventListener('click', (e) => { if (!$('#quickAdd').hidden && (e.target === $('#quickAdd') || !e.target.closest('#quickAdd'))) quickToggle(false); });
 
 // ===== Задачи =====
 let taskFilter = 'active';
@@ -1447,9 +1456,21 @@ function renderOverview() {
   const t = today();
   const todayTasks = S.tasks.filter((x) => !x.done && x.due === t).length;
   const todayEv = S.events.filter((e) => e.date === t).length;
-  $('#daySub').textContent = todayTasks || todayEv
-    ? `Сегодня ${plural(todayEv, 'событие', 'события', 'событий')} и ${plural(todayTasks, 'задача', 'задачи', 'задач')}. Отличный день, чтобы делать важные дела.`
-    : 'Отличный день, чтобы делать важные дела.';
+  const overdue = S.tasks.filter((x) => !x.done && x.due && x.due < t).length;
+  $('#daySub').textContent = (todayTasks || todayEv
+    ? `Сегодня ${plural(todayEv, 'событие', 'события', 'событий')} и ${plural(todayTasks, 'задача', 'задачи', 'задач')}.`
+    : 'Отличный день, чтобы делать важные дела.') + (overdue ? ` Просрочено: ${overdue}.` : '');
+  // Прогресс дня: дела на сегодня (со сроком сегодня или раньше) + привычки
+  {
+    const tDone = S.tasks.filter((x) => x.done && x.doneAt === t && (!x.due || x.due <= t || x.prio)).length;
+    const tLeft = S.tasks.filter((x) => !x.done && x.due && x.due <= t).length;
+    const hDone = S.habits.filter((x) => x.log[t]).length;
+    const done = tDone + hDone, total = done + tLeft + (S.habits.length - hDone);
+    const pct = total ? Math.round(done / total * 100) : 0, C = 2 * Math.PI * 16;
+    $('#dayProgress').innerHTML = total ? `<svg viewBox="0 0 40 40" class="ring"><circle cx="20" cy="20" r="16" class="ring-bg"/>
+      <circle cx="20" cy="20" r="16" class="ring-fg" stroke-dasharray="${(C * pct / 100).toFixed(1)} ${C.toFixed(1)}"/></svg>
+      <div><b>${pct === 100 ? 'День закрыт! 🎉' : `Сделано ${done} из ${total}`}</b><span class="muted small">задачи на сегодня и привычки</span></div>` : '';
+  }
   renderProfile();
 
   // Сегодня в календаре
@@ -1466,9 +1487,9 @@ function renderOverview() {
   prio.slice(0, 7).forEach((x) => ulP.appendChild(taskLi(x, { compact: true })));
 
   // Ближайшие задачи
-  const up = S.tasks.filter((x) => !x.done && x.due).sort((a, b) => a.due.localeCompare(b.due));
+  const up = S.tasks.filter((x) => !x.done && x.due && !x.prio).sort((a, b) => a.due.localeCompare(b.due));
   const ulU = $('#ovUpcoming'); ulU.innerHTML = '';
-  if (!up.length) ulU.innerHTML = '<li class="empty">Нет задач со сроком</li>';
+  if (!up.length) ulU.innerHTML = `<li class="empty">${prio.length ? 'Остальное — в «Приоритетах» 👆' : 'Нет задач со сроком'}</li>`;
   up.slice(0, 7).forEach((x) => ulU.appendChild(taskLi(x, { compact: true })));
 
   // Маленькие карточки
@@ -1477,15 +1498,22 @@ function renderOverview() {
     : '<span class="muted" style="font-size:15px">Укажите город →</span>';
   const doneH = S.habits.filter((x) => x.log[t]).length;
   $('#ovHabits').innerHTML = S.habits.length
-    ? `<div class="big">${doneH} / ${S.habits.length}</div><div class="bar"><div style="width:${doneH / S.habits.length * 100}%;background:var(--green)"></div></div>`
+    ? `<div class="big">${doneH} / ${S.habits.length}</div><div class="bar"><div style="width:${doneH / S.habits.length * 100}%;background:var(--green)"></div></div>
+       <div class="ov-habits">${S.habits.map((x) => `<button type="button" class="hab-chip${x.log[t] ? ' on' : ''}" data-h="${x.id}">${x.log[t] ? '✓' : '○'} ${esc(x.name)}</button>`).join('')}</div>`
     : '<div class="muted">Привычек пока нет</div>';
+  $('#ovHabits').querySelectorAll('[data-h]').forEach((b) => b.onclick = (e) => {
+    e.stopPropagation();
+    const x = S.habits.find((y) => y.id === b.dataset.h); if (!x) return;
+    if (x.log[t]) delete x.log[t]; else x.log[t] = true;
+    save(); renderHabits();
+  });
   const { inc, out, byCur } = monthTotals(t.slice(0, 7)); const bal = inc - out;
   const foreign = Object.keys(byCur).some((c) => c !== 'RUB');
   $('#ovFinance').innerHTML = `<div class="big ${bal >= 0 ? 'pos' : 'neg'}">${foreign ? '≈ ' : ''}${fmt(bal)}</div>
-    <div class="muted small">+${fmt(inc)} / −${fmt(out)}</div>
-    ${foreign ? `<div class="muted small">Доход: ${curLines(byCur, 'inc') || '—'}</div>` : ''}`;
+    <div class="muted small">+${fmt(inc)} / −${fmt(out)}</div>`;
   {
     const sh = showData(), mk = monthKey(new Date());
+    $('#ovShowCard').classList.toggle('hidden', !sh.items.length);
     const m = shMoney(sh.items.filter((i) => i.date.startsWith(mk))), all = shMoney(sh.items);
     const top = sh.cats.map((c) => ({ c, v: sh.items.filter((i) => i.cat === c.id && i.date.startsWith(mk)).reduce((a, i) => a + weightOf(i), 0) }))
       .sort((a, b) => b.v - a.v)[0];
@@ -1732,16 +1760,13 @@ const wireAgain = (root) => root?.querySelectorAll('[data-again]').forEach((b) =
 let mailLoading = false;
 async function loadMail() {
   const ul = $('#ovMail'), all = $('#mailAll');
-  if (!API()) { ul.innerHTML = '<li class="empty">Работает в установленной программе</li>'; return; }
+  if (!API()) { ul.closest('.mail-card').classList.add('hidden'); return; }
   if (mailLoading) return; mailLoading = true;
   try {
     const g = await API().gmail_unread();
     all.classList.add('hidden'); all.innerHTML = '';
-    if (!g.connected) {
-      ul.innerHTML = '<li class="empty">Почта не подключена. <a class="link" id="mailSetup">Подключить →</a></li>';
-      $('#mailSetup').onclick = () => go('settings');
-      return;
-    }
+    ul.closest('.mail-card').classList.toggle('hidden', !g.connected);
+    if (!g.connected) return; // подключается в «Настройках»
     const msgs = (g.messages || []).map((m) => ({ ...m, src: 'G', link: m.link || `https://mail.google.com/mail/u/0/#inbox/${m.id}` }))
       .sort((a, b) => b.ts - a.ts).slice(0, 6);
     ul.innerHTML = msgs.length ? '' : '<li class="empty">Все письма прочитаны 🎉</li>';
