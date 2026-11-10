@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Мой дашборд</title>
-<link rel="stylesheet" href="style.css?v=20261110141635">
+<link rel="stylesheet" href="style.css?v=20261110143402">
 <meta name="theme-color" content="#171412">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
@@ -30,7 +30,6 @@
     <button data-view="habits">Привычки</button>
     <button data-view="finance">Финансы</button>
     <button data-view="converter">Конвертер валют</button>
-    <button data-view="analytics">Аналитика</button>
     <button data-view="settings">Настройки</button>
   </nav>
   <div class="quote" id="quote"></div>
@@ -142,6 +141,12 @@
       <button data-f="all">Все</button>
     </div>
     <ul id="taskList" class="list"></ul>
+    <div class="card an-card">
+      <h3>📊 Как идут дела</h3>
+      <div class="an-stats" id="anStats"></div>
+      <div class="muted small">Выполнено задач за 7 дней</div>
+      <div id="anTasks" class="vbars"></div>
+    </div>
   </section>
 
   <!-- ПРОЕКТЫ -->
@@ -210,6 +215,7 @@
       <button>Добавить</button>
     </form>
     <div class="card"><table id="habitTable" class="habit-table"></table></div>
+    <div class="card an-card"><h3 id="anHabitsTitle">📊 За 7 дней</h3><div id="anHabits"></div></div>
   </section>
 
   <!-- ФИНАНСЫ -->
@@ -274,6 +280,7 @@
       <div class="card" id="finSecsCard"><h3>Расходы по разделам</h3><div id="finSecs"></div></div>
       <div class="card" id="finCatsCard"><h3>Расходы по категориям</h3><div id="finCats"></div></div>
       <div class="card hidden" id="finCtryCard"><h3>По странам</h3><div id="finCtryBars"></div></div>
+      <div class="card" id="anMoneyCard"><h3>📊 Расходы за 6 месяцев</h3><div id="anMoney" class="vbars"></div></div>
     </div>
     <div class="card"><h3>Операции</h3><ul id="txList" class="list"></ul></div>
     </div>
@@ -402,15 +409,6 @@
     </div>
   </section>
 
-  <section id="view-analytics" class="view">
-    <header class="page-head"><h1>Аналитика</h1><p class="muted">Как у вас идут дела</p></header>
-    <div class="grid small" id="anStats"></div>
-    <div class="grid">
-      <div class="card"><h3>Выполнено задач за 7 дней</h3><div id="anTasks" class="vbars"></div></div>
-      <div class="card"><h3>Привычки за 7 дней</h3><div id="anHabits"></div></div>
-      <div class="card"><h3>Расходы за 6 месяцев</h3><div id="anMoney" class="vbars"></div></div>
-    </div>
-  </section>
 
   <!-- АГЕНТЫ -->
 
@@ -546,9 +544,9 @@
     <div class="muted small" id="repMsg"></div>
   </div>
 </div>
-<script>window.APP_BUILD="10.11.2026 14:16";</script>
-<script src="config.js?v=20261110141635"></script>
-<script src="api.js?v=20261110141635"></script>
-<script src="app.js?v=20261110141635"></script>
+<script>window.APP_BUILD="10.11.2026 14:34";</script>
+<script src="config.js?v=20261110143402"></script>
+<script src="api.js?v=20261110143402"></script>
+<script src="app.js?v=20261110143402"></script>
 </body>
 </html>

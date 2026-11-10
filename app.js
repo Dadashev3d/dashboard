@@ -143,10 +143,10 @@ document.querySelectorAll('nav button').forEach((b) => {
 const TAB_VIEWS = [...document.querySelectorAll('.tabbar button[data-view]')].map((b) => b.dataset.view);
 function go(view) {
   if (view === 'show') { view = 'finance'; setFinSec('show'); } // «Шоу» — раздел внутри «Финансов»
+  if (view === 'analytics') view = 'tasks'; // «Аналитика» теперь внутри «Задач», «Привычек» и «Финансов»
   document.querySelectorAll('nav button[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   $('#tabMore')?.classList.toggle('active', !TAB_VIEWS.includes(view)); // раздел из «Ещё» — подсветить «Ещё»
   document.querySelectorAll('.view').forEach((v) => v.classList.toggle('active', v.id === 'view-' + view));
-  if (view === 'analytics') renderAnalytics();
   if (view === 'converter') { renderConverter(); loadRates(); }
   document.body.classList.remove('menu-open'); // на телефоне — закрыть выезжающее меню
   window.scrollTo(0, 0);
@@ -207,6 +207,7 @@ function taskLi(t, { compact = false } = {}) {
   return li;
 }
 function renderTasks() {
+  try { renderAnalytics(); } catch { /* ещё не всё загрузилось */ }
   $('#taskProject').innerHTML = '<option value="">Без проекта</option>' + S.projects.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
   const list = $('#taskList'); list.innerHTML = '';
   const items = S.tasks.filter((t) => ({
@@ -305,6 +306,7 @@ function streak(h) {
 }
 const last7 = () => [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - 6 + i); return d; });
 function renderHabits() {
+  try { renderAnalytics(); } catch { /* ещё не всё загрузилось */ }
   const days = last7();
   const t = $('#habitTable');
   if (!S.habits.length) { t.innerHTML = '<tr><td class="empty">Добавьте первую привычку</td></tr>'; return; }
@@ -508,6 +510,7 @@ function curLines(byCur, key) {
 // В какой валюте показывать итоги (выбирается кнопками над итогами)
 const finView = () => S.finView || 'RUB';
 function renderFinance() {
+  try { renderAnalytics(); } catch { /* ещё не всё загрузилось */ }
   const key = monthKey(finMonth);
   const sec = FIN_SECS.find((x) => x.id === finSec) || FIN_SECS[0];
   $('#finTabs').innerHTML = FIN_SECS.map((x) => `<button data-s="${x.id}" class="${x.id === finSec ? 'active' : ''}">${x.name}</button>`).join('');
@@ -1337,9 +1340,9 @@ function renderAnalytics() {
     ? Math.round(S.habits.reduce((a, h) => a + days.filter((d) => h.log[iso(d)]).length, 0) / (S.habits.length * 7) * 100) : 0;
   const weekDone = S.tasks.filter((t) => t.doneAt && t.doneAt >= iso(days[0])).length;
   $('#anStats').innerHTML = [
-    ['Выполнено за неделю', weekDone], ['Всего выполнено', doneTotal],
-    ['Просрочено', overdue], ['Привычки за неделю', habitPct + '%'],
-  ].map(([l, v]) => `<div class="card"><h3>${l}</h3><div class="big">${v}</div></div>`).join('');
+    ['За неделю', weekDone], ['Всего сделано', doneTotal], ['Просрочено', overdue],
+  ].map(([l, v]) => `<div class="an-stat${l === 'Просрочено' && v ? ' neg' : ''}"><b>${v}</b><span>${l}</span></div>`).join('');
+  $('#anHabitsTitle').textContent = `📊 За 7 дней${S.habits.length ? ` — выполнено ${habitPct}%` : ''}`;
   vbars($('#anTasks'), days.map((d) => ({
     l: d.toLocaleDateString('ru-RU', { weekday: 'short' }), v: S.tasks.filter((t) => t.doneAt === iso(d)).length,
   })));
