@@ -1963,13 +1963,16 @@ function exOverview() {
     `<div class="sum-row" style="margin-top:6px"><span>Доход с бирж за месяц</span><b class="pos">≈ ${fmt(total)}</b></div>` +
     (flItems.length ? `<div class="muted small">🆕 FL.ru: ${plural(flItems.length, 'новый проект', 'новых проекта', 'новых проектов')}${S.flKeywords ? ' по вашим словам' : ''}</div>` : '');
   wireAgain(box);
+  // Пустая карточка на главной не нужна: нет писем, дохода и проектов FL — прячем (ошибки и «вход истёк» оставляем видимыми)
+  const empty = !rows && !total && !flItems.length && !exData.loading && !exData.needLogin && !exData.error;
+  $('#ovExCard')?.classList.toggle('hidden', !exOn().length || empty);
 }
 
 // Показ/скрытие всего, что связано с биржами, + выбор бирж в Настройках
 function applyExUse() {
   const any = exOn().length > 0;
   document.querySelector('nav button[data-view="exchanges"]')?.classList.toggle('hidden', !any);
-  $('#ovExCard')?.classList.toggle('hidden', !any);
+  try { exOverview(); } catch {}
   $('#flCard')?.classList.toggle('hidden', !exUsed('fl'));
   document.querySelector('.ex-layout')?.classList.toggle('single', !exUsed('fl'));
   const box = $('#exUsePick');
