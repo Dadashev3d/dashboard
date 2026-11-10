@@ -149,22 +149,56 @@ function go(view) {
   document.querySelectorAll('.view').forEach((v) => v.classList.toggle('active', v.id === 'view-' + view));
   if (view === 'converter') { renderConverter(); loadRates(); }
   document.body.classList.remove('menu-open'); // на телефоне — закрыть выезжающее меню
+  if (!navFromHistory && view !== curView) navPush(view);
+  curView = view;
   window.scrollTo(0, 0);
 }
+
+// ===== Кнопка «Назад» на телефоне =====
+// Каждый раздел — запись в истории: «Назад» возвращает на предыдущий раздел, с главной — выход.
+// Открытое меню/окно — тоже запись: «Назад» сначала закрывает его.
+var curView = 'overview', navFromHistory = false, navJump = false, navState = { v: 'overview', d: 0 };
+function navSet(st, push) { navState = st; push ? history.pushState(st, '') : history.replaceState(st, ''); }
+function navPush(view) {
+  if (view === 'overview') { if (navState.d > 0) { navJump = true; history.go(-navState.d); } return; } // на главную — к началу истории
+  if (navState.ov) navSet({ v: view, d: navState.d }, false); // переход из меню заменяет запись меню
+  else navSet({ v: view, d: navState.d + 1 }, true);
+}
+function navOverlay() { if (!navState.ov) navSet({ v: curView, d: navState.d + 1, ov: 1 }, true); }
+function overlayOpen() {
+  return document.body.classList.contains('menu-open') || !$('#quickAdd').hidden || !$('#repModal').classList.contains('hidden')
+    || $('#bellList').classList.contains('open') || $('#searchResults').classList.contains('open');
+}
+function closeOverlays() {
+  document.body.classList.remove('menu-open'); quickToggle(false); $('#repModal').classList.add('hidden');
+  if ($('#bellList').classList.contains('open')) closeBell();
+  $('#searchResults').classList.remove('open');
+}
+try { history.replaceState(navState, ''); } catch {}
+window.addEventListener('popstate', (e) => {
+  const was = navState, st = e.state && e.state.v ? e.state : { v: 'overview', d: 0 };
+  navState = st;
+  if (navJump) { navJump = false; return; } // это мы сами вернулись к главной
+  if (overlayOpen()) {
+    closeOverlays();
+    if (!was.ov) { navSet(was, true); return; } // окно было без своей записи — остаёмся в разделе
+  } else if (was.ov && st.v === curView) { history.back(); return; } // меню уже закрыли сами — пропускаем пустой шаг
+  if (st.v !== curView) { navFromHistory = true; try { go(st.v); } finally { navFromHistory = false; } }
+});
 // Узкий экран (телефон): меню выезжает по кнопке ☰
-$('#menuBtn').onclick = (e) => { e.stopPropagation(); document.body.classList.toggle('menu-open'); };
+$('#menuBtn').onclick = (e) => { e.stopPropagation(); if (document.body.classList.toggle('menu-open')) navOverlay(); };
 $('#menuShade').onclick = () => document.body.classList.remove('menu-open');
 document.querySelectorAll('nav button[data-view]').forEach((b) => b.onclick = () => go(b.dataset.view));
 document.querySelectorAll('[data-go]').forEach((c) => c.onclick = (e) => { e.stopPropagation(); go(c.dataset.go); });
 // Нижнее меню телефона: «Ещё» открывает полное меню, «+» — новая задача
-$('#tabMore').onclick = (e) => { e.stopPropagation(); document.body.classList.add('menu-open'); };
+$('#tabMore').onclick = (e) => { e.stopPropagation(); document.body.classList.add('menu-open'); navOverlay(); };
 const QUICK = {
   task: () => { go('tasks'); setTimeout(() => $('#taskText').focus(), 60); },
   spend: () => { go('finance'); setTimeout(() => { $('#txType').value = 'out'; $('#txForm').scrollIntoView({ behavior: 'smooth', block: 'start' }); $('#txAmount').focus(); }, 60); },
   note: () => { go('notes'); setTimeout(() => $('#newNoteBtn').click(), 60); },
   remind: () => { selDay = today(); go('calendar'); setTimeout(() => { $('#eventForm').scrollIntoView({ behavior: 'smooth', block: 'center' }); $('#evTitle').focus(); }, 60); },
 };
-const quickToggle = (open) => { $('#quickAdd').hidden = !open; $('#fabAdd').classList.toggle('open', open); };
+const quickToggle = (open) => { $('#quickAdd').hidden = !open; $('#fabAdd').classList.toggle('open', open); if (open) navOverlay(); };
 $('#fabAdd').onclick = (e) => { e.stopPropagation(); quickToggle($('#quickAdd').hidden); };
 $('#quickAdd').querySelectorAll('[data-q]').forEach((b) => b.onclick = () => { quickToggle(false); QUICK[b.dataset.q](); });
 document.addEventListener('click', (e) => { if (!$('#quickAdd').hidden && (e.target === $('#quickAdd') || !e.target.closest('#quickAdd'))) quickToggle(false); });
@@ -974,7 +1008,7 @@ $('#repBtn').onclick = () => {
   $('#repCtry').innerHTML = '<option value="all">Все страны</option>' + COUNTRIES.map((c) => `<option value="${c.id}">${c.name}</option>`).join('');
   $('#repCtry').value = ['all', 'none'].includes(finCountry) ? 'all' : finCountry;
   if (!$('#repFrom').value) { $('#repFrom').value = today().slice(0, 8) + '01'; $('#repTo').value = today(); }
-  $('#repModal').classList.remove('hidden');
+  $('#repModal').classList.remove('hidden'); navOverlay();
   $('#repShare').classList.toggle('hidden', !(navigator.canShare && navigator.canShare({ files: [new File(['x'], 'x.pdf', { type: 'application/pdf' })] })));
   repRefresh();
 };
@@ -1601,7 +1635,7 @@ $('#bellBtn').onclick = (e) => {
     bellHighlight = new Set(notifications().map((x) => x.key).filter((k) => !seen.has(k)));
     markBellSeen();
   } else bellHighlight = null;
-  $('#bellList').classList.toggle('open', opening);
+  $('#bellList').classList.toggle('open', opening); if (opening) navOverlay();
   renderBell();
 };
 
