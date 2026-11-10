@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Мой дашборд</title>
-<link rel="stylesheet" href="style.css?v=20261110012702">
+<link rel="stylesheet" href="style.css?v=20261110141635">
 <meta name="theme-color" content="#171412">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
@@ -31,7 +31,6 @@
     <button data-view="finance">Финансы</button>
     <button data-view="converter">Конвертер валют</button>
     <button data-view="analytics">Аналитика</button>
-    <button data-view="world">Погода и сервисы</button>
     <button data-view="settings">Настройки</button>
   </nav>
   <div class="quote" id="quote"></div>
@@ -115,8 +114,13 @@
       <div class="card ov-wide" data-go="projects"><h3>Проекты</h3><div id="ovProjects"></div></div>
     </div>
 
-    <div class="card">
-      <div class="card-head"><h3>Мои сервисы</h3><a class="link" data-go="world">+ Добавить сервис</a></div>
+    <div class="card" id="svCard">
+      <div class="card-head"><h3>Мои сервисы</h3><a class="link" id="svEdit">✎ Изменить</a></div>
+      <form id="linkForm" class="row-form hidden">
+        <input id="linkTitle" placeholder="Название, например YouTube" required>
+        <input id="linkUrl" type="url" placeholder="Адрес: https://..." required>
+        <button>Добавить</button>
+      </form>
       <div id="ovServices" class="services"></div>
     </div>
   </section>
@@ -412,7 +416,7 @@
 
   <!-- ПОГОДА И СЕРВИСЫ -->
   <section id="view-world" class="view">
-    <header class="page-head"><h1>Погода и сервисы</h1></header>
+    <header class="page-head"><h1>Погода</h1></header>
     <div class="card">
       <form id="cityForm" class="row-form">
         <input id="cityInput" placeholder="Ваш город, например Москва" required>
@@ -420,17 +424,6 @@
       </form>
       <div id="weatherNow"></div>
       <div id="weatherDays" class="days"></div>
-    </div>
-    <div class="card">
-      <h3>Мои сервисы и сайты</h3>
-      <p class="muted">Почта, календарь, новости — всё, что открываете каждый день. Плитки появятся на главной.</p>
-      <form id="linkForm" class="row-form">
-        <input id="linkIcon" placeholder="Значок" maxlength="2" style="width:80px;flex:0">
-        <input id="linkTitle" placeholder="Название" required>
-        <input id="linkUrl" type="url" placeholder="https://..." required>
-        <button>Добавить</button>
-      </form>
-      <div id="linkList" class="links"></div>
     </div>
   </section>
 
@@ -553,9 +546,9 @@
     <div class="muted small" id="repMsg"></div>
   </div>
 </div>
-<script>window.APP_BUILD="10.11.2026 01:27";</script>
-<script src="config.js?v=20261110012702"></script>
-<script src="api.js?v=20261110012702"></script>
-<script src="app.js?v=20261110012702"></script>
+<script>window.APP_BUILD="10.11.2026 14:16";</script>
+<script src="config.js?v=20261110141635"></script>
+<script src="api.js?v=20261110141635"></script>
+<script src="app.js?v=20261110141635"></script>
 </body>
 </html>

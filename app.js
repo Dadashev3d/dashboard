@@ -1408,7 +1408,7 @@ async function loadWeather() {
 // ===== Сервисы (ссылки) =====
 $('#linkForm').onsubmit = (e) => {
   e.preventDefault();
-  S.links.push({ id: uid(), icon: $('#linkIcon').value.trim() || '🔗', title: $('#linkTitle').value.trim(), url: $('#linkUrl').value.trim() });
+  S.links.push({ id: uid(), icon: '🔗', title: $('#linkTitle').value.trim(), url: $('#linkUrl').value.trim() });
   e.target.reset(); save(); renderLinks();
 };
 // У сервисов Google общий значок «G» — для них берём фирменные иконки
@@ -1419,7 +1419,7 @@ const FAVICONS = {
 };
 function linkTile(l, removable) {
   const a = document.createElement('a');
-  a.className = removable ? 'link-tile' : 'service';
+  a.className = 'service' + (removable ? ' editable' : '');
   a.href = l.url; a.target = '_blank'; a.rel = 'noopener';
   const fav = l.app === 'chrome' ? 'https://www.google.com/s2/favicons?domain=chrome.google.com&sz=64'
     : FAVICONS[hostOf(l.url)] || `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostOf(l.url))}&sz=64`;
@@ -1428,6 +1428,7 @@ function linkTile(l, removable) {
     ? `${ico}<span>${esc(l.title)}</span><button class="del">✕</button>`
     : `${ico}<span>${esc(l.title)}</span>`;
   a.onclick = (e) => {
+    if (removable) { e.preventDefault(); return; } // в режиме «Изменить» плитки не открываются
     if (!API()) return;
     e.preventDefault();
     if (l.app === 'chrome') API().launch_chrome(); else API().open_url(l.url);
@@ -1437,10 +1438,17 @@ function linkTile(l, removable) {
   };
   return a;
 }
+// Сервисы живут на главной: «✎ Изменить» — добавить свой сайт или убрать плитку
+var svEditing = false;
 function renderLinks() {
-  const box = $('#linkList'); box.innerHTML = '';
-  S.links.forEach((l) => box.appendChild(linkTile(l, true)));
+  const sv = $('#ovServices'); sv.innerHTML = '';
+  S.links.forEach((l) => sv.appendChild(linkTile(l, svEditing)));
+  if (svEditing && !S.links.length) sv.innerHTML = '<div class="muted">Добавьте сайт, который открываете каждый день</div>';
+  $('#svCard').classList.toggle('editing', svEditing);
+  $('#linkForm').classList.toggle('hidden', !svEditing);
+  $('#svEdit').textContent = svEditing ? 'Готово' : '✎ Изменить';
 }
+$('#svEdit').onclick = () => { svEditing = !svEditing; renderLinks(); if (svEditing) $('#linkTitle').focus(); };
 
 // ===== Главная =====
 const QUOTES = [
@@ -1528,8 +1536,7 @@ function renderOverview() {
   }).join('') : '<div class="muted">Проектов пока нет</div>';
 
   // Сервисы
-  const sv = $('#ovServices'); sv.innerHTML = '';
-  S.links.forEach((l) => sv.appendChild(linkTile(l, false)));
+  renderLinks();
   exOverview();
 }
 $('#addPrioBtn').onclick = () => { $('#prioForm').classList.toggle('hidden'); $('#prioText').focus(); };
