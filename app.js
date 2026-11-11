@@ -2144,7 +2144,22 @@ async function maybeOfferRestore() {
 // ===== Тема оформления =====
 // S.theme: 'auto' (день/ночь по часам) или конкретная тема. День = «Светлая», ночь = «Тёмная».
 // Выбранная тема (любая, кроме «Авто») работает всегда — часы её не переключают.
-const DARK_THEMES = ['dark', 'ocean'];
+// 10 тем: 5 светлых (с лёгким оттенком, не «больнично-белые») и 5 тёмных. c = [фон, карточка, акцент]
+const THEMES = [
+  { k: 'paper', n: 'Светлая', c: ['#f3f4f7', '#ffffff', '#f0505f'] },
+  { k: 'lavender', n: 'Лаванда', c: ['#f4f2fa', '#fcfbff', '#7c5cf0'] },
+  { k: 'mint', n: 'Мята', c: ['#eef5f1', '#f8fcfa', '#1f9d74'] },
+  { k: 'sand', n: 'Песок', c: ['#f6f1e9', '#fcf9f4', '#d9822b'] },
+  { k: 'rose', n: 'Пудра', c: ['#f8eff1', '#fdf8f9', '#d6577a'] },
+  { k: 'dark', n: 'Тёмная', c: ['#0e0f12', '#191a1f', '#ff5f6d'], d: 1 },
+  { k: 'ocean', n: 'Океан', c: ['#0b141b', '#121e27', '#22c3cf'], d: 1 },
+  { k: 'lavnight', n: 'Лаванда тёмная', c: ['#14111f', '#1d1930', '#9d7dff'], d: 1 },
+  { k: 'forest', n: 'Лес', c: ['#0f1612', '#17211b', '#e0a93b'], d: 1 },
+  { k: 'graphite', n: 'Графит', c: ['#16181c', '#1f2228', '#5b8cff'], d: 1 },
+];
+const DARK_THEMES = THEMES.filter((t) => t.d).map((t) => t.k);
+$('#themePick').innerHTML = THEMES.map((t) => `<button type="button" class="theme-opt" data-theme="${t.k}" title="${t.n}">
+  <span class="theme-dot" style="--a:${t.c[0]};--b:${t.c[1]};--c:${t.c[2]}"></span><span class="theme-name">${t.n}</span></button>`).join('');
 const DAY_FROM = 7, NIGHT_FROM = 19; // с 7:00 день, с 19:00 ночь
 const isDayTime = () => { const h = new Date().getHours(); return h >= DAY_FROM && h < NIGHT_FROM; };
 const effectiveTheme = () => {
