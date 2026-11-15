@@ -1106,3 +1106,22 @@ body[data-theme="graphite"] {
 .theme-name { font-size: 12px; font-weight: 500; line-height: 1.2; color: var(--muted); }
 .theme-opt.active .theme-name { color: var(--text); font-weight: 700; }
 @media (max-width: 760px) { .theme-pick { gap: 12px 4px; } .theme-dot { width: 48px; height: 48px; } }
+
+/* ===== Чек по фото ===== */
+.rc-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.rc-head h3 { margin: 0; }
+.rc-btn { background: var(--accent-soft); color: var(--accent); border: 0; box-shadow: none; font-weight: 700; padding: 8px 14px; border-radius: 999px; }
+.rc-wait { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 30px 0; color: var(--muted); }
+.rc-spin { width: 36px; height: 36px; border-radius: 50%; border: 4px solid var(--panel-2); border-top-color: var(--accent); animation: rcSpin .8s linear infinite; }
+@keyframes rcSpin { to { transform: rotate(360deg); } }
+.rc-err { padding: 14px; border-radius: 14px; background: var(--accent-soft); margin-bottom: 10px; }
+.rc-items { display: flex; flex-direction: column; max-height: 42vh; overflow-y: auto; background: var(--panel-2); border-radius: 14px; padding: 4px 10px; }
+.rc-item { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+.rc-item:last-child { border-bottom: 0; }
+.rc-item input { flex: none; width: 18px; height: 18px; }
+.rc-name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.rc-name small { color: var(--muted); font-size: 12px; }
+.rc-item b { flex: none; }
+.rc-item.off .rc-name, .rc-item.off b { opacity: .45; text-decoration: line-through; }
+.rc-mode button:disabled { opacity: .45; }
+#rcModal .fld.hidden { display: none; }

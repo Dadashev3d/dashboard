@@ -167,12 +167,12 @@ function navPush(view) {
 function navOverlay() { if (!navState.ov) navSet({ v: curView, d: navState.d + 1, ov: 1 }, true); }
 function overlayOpen() {
   return document.body.classList.contains('menu-open') || !$('#quickAdd').hidden || !$('#repModal').classList.contains('hidden')
-    || $('#bellList').classList.contains('open') || $('#searchResults').classList.contains('open');
+    || $('#bellList').classList.contains('open') || $('#searchResults').classList.contains('open') || !$('#rcModal').classList.contains('hidden');
 }
 function closeOverlays() {
   document.body.classList.remove('menu-open'); quickToggle(false); $('#repModal').classList.add('hidden');
   if ($('#bellList').classList.contains('open')) closeBell();
-  $('#searchResults').classList.remove('open');
+  $('#searchResults').classList.remove('open'); $('#rcModal').classList.add('hidden');
 }
 try { history.replaceState(navState, ''); } catch {}
 window.addEventListener('popstate', (e) => {
@@ -481,6 +481,132 @@ $('#txForm').onsubmit = (e) => {
   $('#txAmount').value = ''; $('#txNote').value = ''; txUsd.reset();
   save(); renderFinance(); renderExchanges();
 };
+
+// ===== Чек по фото: Gemini распознаёт позиции → проверка → в расходы =====
+const RC_MODELS = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+const RC_PROMPT = `Это фото кассового чека. Верни ТОЛЬКО JSON такого вида:
+{"store":"название магазина или пусто","date":"YYYY-MM-DD или пусто","currency":"код валюты ISO (RUB, USD, EUR, AZN, TRY, CNY, EGP …)",
+ "total":итоговая сумма числом,"items":[{"name":"позиция по-русски, коротко","qty":количество числом,"sum":сумма за позицию числом,"cat":"категория"}]}
+Категории — одна из: Продукты, Кафе и рестораны, Транспорт, Дом и быт, Здоровье, Одежда, Развлечения, Связь, Другое.
+Скидки вычти из позиций. Если на фото не чек — верни {"error":"not_receipt"}.`;
+function rcKeyMsg() {
+  $('#rcKeyMsg').textContent = S.geminiKey ? '✓ Ключ сохранён — распознавание чеков включено.' : 'Ключ не указан — распознавание чеков выключено.';
+}
+$('#rcKeyForm').onsubmit = (e) => {
+  e.preventDefault(); const k = $('#rcKey').value.trim();
+  if (k && k !== '••••••••') S.geminiKey = k; else if (!k) delete S.geminiKey;
+  save(); $('#rcKey').value = S.geminiKey ? '••••••••' : ''; rcKeyMsg();
+};
+// фото → JPEG не больше 1600 px (быстрее и дешевле)
+function rcShrink(file) {
+  return new Promise((res, rej) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, 1600 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      res(c.toDataURL('image/jpeg', 0.85).split(',')[1]);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Не удалось открыть фото')); };
+    img.src = url;
+  });
+}
+async function rcAsk(b64) {
+  let last = '';
+  for (const m of RC_MODELS) {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': S.geminiKey },
+      body: JSON.stringify({ contents: [{ parts: [{ inline_data: { mime_type: 'image/jpeg', data: b64 } }, { text: RC_PROMPT }] }],
+        generationConfig: { response_mime_type: 'application/json', temperature: 0 } }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (r.status === 404) { last = 'модель не найдена'; continue; } // старое имя модели — пробуем следующую
+    if (!r.ok) {
+      const msg = j.error?.message || r.status;
+      if (r.status === 400 && /api key/i.test(msg)) throw new Error('Ключ Gemini не подошёл — проверьте его в Настройках');
+      if (r.status === 429) throw new Error('Лимит бесплатных запросов Gemini — попробуйте через минуту');
+      throw new Error('Gemini: ' + msg);
+    }
+    const txt = j.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '';
+    return JSON.parse(txt.replace(/^```(json)?|```$/g, '').trim());
+  }
+  throw new Error('Gemini: ' + last);
+}
+var rcData = null;
+function rcOpen(html) { $('#rcBody').innerHTML = html; if ($('#rcModal').classList.contains('hidden')) { $('#rcModal').classList.remove('hidden'); navOverlay(); } }
+const rcClose = () => $('#rcModal').classList.add('hidden');
+$('#rcClose').onclick = rcClose;
+$('#rcModal').onclick = (e) => { if (e.target.id === 'rcModal') rcClose(); };
+$('#rcBtn').onclick = () => {
+  if (!S.geminiKey) {
+    if (confirm('Чтобы распознавать чеки, нужен бесплатный ключ Gemini. Открыть Настройки?')) { go('settings'); setTimeout(() => $('#rcKeyCard').scrollIntoView({ behavior: 'smooth', block: 'start' }), 60); }
+    return;
+  }
+  $('#rcFile').click();
+};
+$('#rcFile').onchange = async () => {
+  const f = $('#rcFile').files[0]; $('#rcFile').value = '';
+  if (!f) return;
+  rcOpen('<div class="rc-wait"><div class="rc-spin"></div>Читаю чек…</div>');
+  try {
+    const d = await rcAsk(await rcShrink(f));
+    if (d.error) throw new Error('На фото не видно чека — попробуйте снять ближе и ровнее');
+    d.items = (d.items || []).filter((i) => i && i.name).map((i) => ({ name: String(i.name), sum: Math.abs(num(i.sum)) || 0, cat: i.cat || 'Другое', on: true }));
+    if (!d.items.length && !num(d.total)) throw new Error('Не нашёл на чеке ни одной суммы');
+    d.currency = CURS[String(d.currency || '').toUpperCase()] ? String(d.currency).toUpperCase() : $('#txCur').value;
+    d.date = /^\d{4}-\d{2}-\d{2}$/.test(d.date || '') && d.date <= today() ? d.date : today();
+    d.total = Math.abs(num(d.total)) || 0;
+    rcData = d; rcRender();
+  } catch (err) {
+    rcOpen(`<div class="rc-err">⚠️ ${esc(err.message || err)}</div><button type="button" id="rcRetry">📷 Снять ещё раз</button>`);
+    $('#rcRetry').onclick = () => $('#rcFile').click();
+  }
+};
+function rcRender() {
+  const d = rcData, cats = [...new Set(d.items.map((i) => i.cat))];
+  const sel = d.items.filter((i) => i.on).reduce((a, i) => a + i.sum, 0);
+  rcOpen(`
+    <div class="fin-row">
+      <label class="fld grow"><span>Магазин</span><input id="rcStore" value="${esc(d.store || '')}" placeholder="необязательно"></label>
+      <label class="fld"><span>Дата</span><input id="rcDate" type="date" value="${d.date}"></label>
+    </div>
+    <div class="rc-items">${d.items.map((i, n) => `
+      <label class="rc-item${i.on ? '' : ' off'}"><input type="checkbox" data-n="${n}" ${i.on ? 'checked' : ''}>
+        <span class="rc-name">${esc(i.name)}<small>${esc(i.cat)}</small></span><b>${fmt(i.sum, d.currency)}</b></label>`).join('') || '<div class="muted">Позиций не видно — запишу общей суммой</div>'}
+    </div>
+    <div class="sum-row total"><span>Итого${d.total && Math.abs(d.total - sel) > 0.01 && d.items.length ? ` <small class="muted">(по чеку ${fmt(d.total, d.currency)})</small>` : ''}</span><b>${fmt(d.items.length ? sel : d.total, d.currency)}</b></div>
+    <div class="fld"><span>Как записать</span>
+      <div class="mode-pick rc-mode">
+        <button type="button" data-m="one" class="${d.mode !== 'split' ? 'active' : ''}">Одной записью</button>
+        <button type="button" data-m="split" class="${d.mode === 'split' ? 'active' : ''}" ${cats.length > 1 ? '' : 'disabled'}>По категориям (${cats.length})</button>
+      </div></div>
+    <label class="fld ${d.mode === 'split' ? 'hidden' : ''}" id="rcCatFld"><span>Категория</span><input id="rcCat" list="catList" value="${esc(d.cat || cats[0] || 'Продукты')}"></label>
+    <div class="muted small">Раздел и страна — как выбраны в форме «Новая запись».</div>
+    <button type="button" id="rcSave">➕ Добавить в расходы</button>`);
+  $('#rcBody').querySelectorAll('[data-n]').forEach((c) => c.onchange = () => { rcKeep(); d.items[c.dataset.n].on = c.checked; rcRender(); });
+  $('#rcBody').querySelectorAll('[data-m]').forEach((b) => b.onclick = () => { rcKeep(); d.mode = b.dataset.m; rcRender(); });
+  $('#rcSave').onclick = rcSave;
+}
+function rcKeep() { const d = rcData; d.store = $('#rcStore').value; d.date = $('#rcDate').value || d.date; if ($('#rcCat')) d.cat = $('#rcCat').value; }
+function rcSave() {
+  rcKeep();
+  const d = rcData, on = d.items.filter((i) => i.on);
+  const sec = finSec === 'all' ? $('#txSec').value : finSec, country = txCtry.get();
+  const base = { type: 'out', cur: d.currency, date: d.date, note: (d.store || 'Чек').trim(), ...(sec ? { sec } : {}), ...(country ? { country } : {}) };
+  const rows = [];
+  if (d.mode === 'split' && on.length) {
+    const by = {}; on.forEach((i) => { by[i.cat] = (by[i.cat] || 0) + i.sum; });
+    Object.entries(by).forEach(([cat, sum]) => rows.push({ ...base, cat, amount: Math.round(sum * 100) / 100 }));
+  } else {
+    const amount = d.items.length ? on.reduce((a, i) => a + i.sum, 0) : d.total;
+    rows.push({ ...base, cat: (d.cat || 'Продукты').trim() || 'Продукты', amount: Math.round(amount * 100) / 100 });
+  }
+  const good = rows.filter((r) => r.amount > 0);
+  if (!good.length) { alert('Нечего добавлять: сумма 0'); return; }
+  good.forEach((r) => S.tx.push({ id: uid(), ...r }));
+  save(); rcClose(); renderFinance(); renderExchanges();
+  rcData = null;
+}
 
 // ----- Валюты: ₽, $, € и курс ЦБ для пересчёта в рубли -----
 const CURS = { RUB: '₽', USD: '$', EUR: '€', AZN: '₼', TRY: '₺', CNY: '¥', EGP: 'E£' };
@@ -2192,6 +2318,7 @@ $('#dayNightBtn').onclick = () => setTheme(DARK_THEMES.includes(effectiveTheme()
 function renderAll() {
   applyTheme();
   $('#nameInput').value = S.name;
+  $('#rcKey').value = S.geminiKey ? '••••••••' : ''; rcKeyMsg();
   $('#quote').textContent = QUOTES[new Date().getDate() % QUOTES.length];
   renderTasks(); renderProjects(); renderNotes(); renderHabits(); renderFinance(); renderShow(); renderCalendar();
   renderLinks(); renderOverview(); renderBell(); loadWeather(); renderCloud();

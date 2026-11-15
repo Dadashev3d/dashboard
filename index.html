@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Мой дашборд</title>
-<link rel="stylesheet" href="style.css?v=20261111154101">
+<link rel="stylesheet" href="style.css?v=20261115145410">
 <meta name="theme-color" content="#171412">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
@@ -251,7 +251,8 @@
     <div id="finTx">
     <p id="finSecHint" class="muted small"></p>
     <form id="txForm" class="card fin-form">
-      <h3 id="txFormTitle">Новая запись</h3>
+      <div class="rc-head"><h3 id="txFormTitle">Новая запись</h3><button type="button" class="rc-btn" id="rcBtn">📷 Чек</button></div>
+      <input type="file" id="rcFile" accept="image/*" capture="environment" hidden>
       <div class="fin-row">
         <label class="fld"><span>Что</span><select id="txType"><option value="out">Расход</option><option value="in">Доход</option></select></label>
         <label class="fld" id="txSecFld"><span>Раздел</span><select id="txSec"><option value="personal">🏠 Личные</option><option value="work">💼 Рабочие</option><option value="dev">👨‍💻 Программисты</option><option value="agents">🤝 Агенты</option><option value="">Без раздела</option></select></label>
@@ -456,6 +457,17 @@
       <p class="theme-sub">Или тема</p>
       <div class="theme-pick" id="themePick"></div>
     </div>
+    <div class="card" id="rcKeyCard">
+      <h3>🧾 Распознавание чеков</h3>
+      <p class="muted small">Сфотографируйте чек в «Финансах» (кнопка «📷 Чек») — ИИ Google Gemini сам найдёт позиции, суммы и дату. Нужен бесплатный ключ:
+        откройте <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>, войдите своим Google-аккаунтом, нажмите «Create API key» и вставьте ключ сюда.</p>
+      <form id="rcKeyForm" class="row-form">
+        <input id="rcKey" type="password" autocomplete="off" placeholder="Ключ Gemini (начинается с AIza…)">
+        <button>Сохранить</button>
+      </form>
+      <p class="muted small" id="rcKeyMsg"></p>
+      <p class="muted small">На бесплатном тарифе Google может использовать присланные фото для улучшения своих моделей — не фотографируйте то, что не хотите показывать.</p>
+    </div>
     <div class="card">
       <h3>Мои биржи</h3>
       <p class="muted small">Отметьте биржи фриланса, которыми пользуетесь — дашборд будет показывать заказы, сообщения и оплаты из их писем в Gmail. Если не пользуетесь ни одной, оставьте всё пустым — раздел «Биржи» скроется.</p>
@@ -509,6 +521,13 @@
   </div>
 </div>
 
+<div id="rcModal" class="rep-modal hidden">
+  <div class="rep-box card">
+    <div class="wal-head"><h3>🧾 Чек</h3><button type="button" class="ghost" id="rcClose">✕</button></div>
+    <div id="rcBody"></div>
+  </div>
+</div>
+
 <div id="repModal" class="rep-modal hidden">
   <div class="rep-box card">
     <div class="wal-head"><h3>📄 Отчёт о расходах (PDF)</h3><button type="button" class="ghost" id="repClose">✕</button></div>
@@ -527,9 +546,9 @@
     <div class="muted small" id="repMsg"></div>
   </div>
 </div>
-<script>window.APP_BUILD="11.11.2026 15:41";</script>
-<script src="config.js?v=20261111154101"></script>
-<script src="api.js?v=20261111154101"></script>
-<script src="app.js?v=20261111154101"></script>
+<script>window.APP_BUILD="15.11.2026 14:54";</script>
+<script src="config.js?v=20261115145410"></script>
+<script src="api.js?v=20261115145410"></script>
+<script src="app.js?v=20261115145410"></script>
 </body>
 </html>
