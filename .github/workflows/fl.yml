@@ -1,8 +1,7 @@
-# Робот: раз в 30 минут обновляет ленту FL.ru (fl.json) для мобильной версии
+# Робот ленты FL.ru (fl.json). Выключен по просьбе владельца (15.11.2026): сам не запускается,
+# только вручную кнопкой «Run workflow». Чтобы включить снова — вернуть блок schedule с cron.
 name: Лента FL.ru
 on:
-  schedule:
-    - cron: "*/30 * * * *"
   workflow_dispatch: {}
 permissions:
   contents: write
