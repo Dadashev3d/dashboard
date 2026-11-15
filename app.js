@@ -489,14 +489,70 @@ const RC_PROMPT = `Это фото кассового чека. Верни ТО�
  "total":итоговая сумма числом,"items":[{"name":"позиция по-русски, коротко","qty":количество числом,"sum":сумма за позицию числом,"cat":"категория"}]}
 Категории — одна из: Продукты, Кафе и рестораны, Транспорт, Дом и быт, Здоровье, Одежда, Развлечения, Связь, Другое.
 Скидки вычти из позиций. Если на фото не чек — верни {"error":"not_receipt"}.`;
-function rcKeyMsg() {
-  $('#rcKeyMsg').textContent = S.geminiKey ? '✓ Ключ сохранён — распознавание чеков включено.' : 'Ключ не указан — распознавание чеков выключено.';
+// ----- «Подключить Gemini»: 3 шага, без ручного копирования в поля -----
+const GEM_URL = 'https://aistudio.google.com/apikey';
+const GEM_RE = /^(AIza[0-9A-Za-z_-]{20,}|AQ\.[0-9A-Za-z_.-]{20,})$/;
+var gemOpened = false;
+document.addEventListener('visibilitychange', () => { if (!document.hidden && gemOpened && !S.geminiKey) document.querySelectorAll('.gem-paste').forEach((b) => b.classList.add('pulse')); });
+function gemHtml() {
+  if (S.geminiKey) return `<div class="gem-ok">✓ Gemini подключён — кнопка «📷 Чек» в Финансах работает.</div>
+    <button type="button" class="ghost" data-g="off">Отключить</button>`;
+  return `<p class="muted small">Бесплатно, около минуты. Нужен только ваш Google-аккаунт.</p>
+    <ol class="gem-steps">
+      <li><div><b>Откройте страницу Google</b></div><button type="button" data-g="open">Открыть Google AI Studio →</button></li>
+      <li><div><b>Нажмите «Create API key», затем «Create key» и «Copy key»</b>
+        <div class="muted small">Если Google попросит войти или принять условия — согласитесь.</div></div></li>
+      <li><div><b>Вернитесь сюда и нажмите</b></div><button type="button" data-g="paste" class="gem-paste">📋 Вставить ключ</button></li>
+    </ol>
+    <details class="gem-manual"><summary>Кнопка не вставляет? Вставьте вручную</summary>
+      <div class="row-form"><input data-g="input" type="password" autocomplete="off" placeholder="Вставьте ключ сюда"><button type="button" data-g="save">Подключить</button></div></details>
+    <p class="gem-msg small"></p>
+    <p class="muted small">На бесплатном тарифе Google может использовать присланные фото для улучшения своих моделей.</p>`;
 }
-$('#rcKeyForm').onsubmit = (e) => {
-  e.preventDefault(); const k = $('#rcKey').value.trim();
-  if (k && k !== '••••••••') S.geminiKey = k; else if (!k) delete S.geminiKey;
-  save(); $('#rcKey').value = S.geminiKey ? '••••••••' : ''; rcKeyMsg();
-};
+function gemWire(box, onDone) {
+  box.innerHTML = gemHtml();
+  const msg = (t, bad) => { const m = box.querySelector('.gem-msg'); if (m) { m.textContent = t; m.classList.toggle('neg', !!bad); } };
+  const q = (k) => box.querySelector(`[data-g="${k}"]`);
+  if (q('off')) q('off').onclick = () => { if (confirm('Отключить Gemini? Кнопка «📷 Чек» перестанет работать.')) { delete S.geminiKey; save(); gemRenderAll(); } };
+  if (q('open')) q('open').onclick = () => { gemOpened = true; openUrl(GEM_URL); box.querySelector('.gem-paste')?.classList.add('pulse'); };
+  const tryKey = async (raw) => {
+    const key = String(raw || '').replace(/["'\s]/g, '');
+    if (!GEM_RE.test(key)) {
+      msg(key ? 'Это не похоже на ключ Gemini. На странице Google нажмите «Copy key» и попробуйте снова.' : 'Буфер обмена пуст — сначала нажмите «Copy key» на странице Google.', true);
+      return;
+    }
+    msg('Проверяю ключ…');
+    let ok = true;
+    try {
+      const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1', { headers: { 'x-goog-api-key': key } });
+      if (r.status === 400 || r.status === 401 || r.status === 403) ok = false;
+    } catch { /* нет сети — сохраним, проверится при первом чеке */ }
+    if (!ok) { msg('Google не принял этот ключ. Создайте новый на странице Google и вставьте ещё раз.', true); return; }
+    S.geminiKey = key; save(); gemRenderAll(); onDone?.();
+  };
+  if (q('paste')) q('paste').onclick = async () => {
+    let t = '';
+    try { t = await navigator.clipboard.readText(); } catch {}
+    if (!t && typeof API()?.read_clipboard === 'function') { try { t = await API().read_clipboard(); } catch {} }
+    if (!t) { box.querySelector('.gem-manual').open = true; q('input').focus(); msg('Не получилось прочитать буфер — вставьте ключ в поле ниже (долгое нажатие → «Вставить»).', true); return; }
+    tryKey(t);
+  };
+  if (q('save')) q('save').onclick = () => tryKey(q('input').value);
+}
+function gemRenderAll() {
+  document.querySelectorAll('#rcKeyCard .gem-box').forEach((b) => gemWire(b));
+  if (!$('#rcModal').classList.contains('hidden') && $('#rcBody .gem-box')) gemSheet();
+}
+// окно «Подключите Gemini» — когда нажали «📷 Чек» без ключа
+function gemSheet() {
+  if (S.geminiKey) {
+    rcOpen(`<div class="gem-ok">✓ Gemini подключён!</div><p>Теперь сфотографируйте чек.</p><button type="button" id="rcShoot">📷 Сфотографировать чек</button><div class="gem-box hidden"></div>`);
+    $('#rcShoot').onclick = () => $('#rcFile').click();
+    return;
+  }
+  rcOpen('<p><b>Подключите Gemini</b> — ИИ Google, который читает чеки. Делается один раз.</p><div class="gem-box"></div>');
+  gemWire($('#rcBody .gem-box'), () => gemSheet());
+}
 // фото → JPEG не больше 1600 px (быстрее и дешевле)
 function rcShrink(file) {
   return new Promise((res, rej) => {
@@ -523,7 +579,7 @@ async function rcAsk(b64) {
     if (r.status === 404) { last = 'модель не найдена'; continue; } // старое имя модели — пробуем следующую
     if (!r.ok) {
       const msg = j.error?.message || r.status;
-      if (r.status === 400 && /api key/i.test(msg)) throw new Error('Ключ Gemini не подошёл — проверьте его в Настройках');
+      if (r.status === 400 && /api key/i.test(msg)) throw new Error('Google больше не принимает ключ Gemini — подключите его заново в Настройках');
       if (r.status === 429) throw new Error('Лимит бесплатных запросов Gemini — попробуйте через минуту');
       throw new Error('Gemini: ' + msg);
     }
@@ -537,13 +593,7 @@ function rcOpen(html) { $('#rcBody').innerHTML = html; if ($('#rcModal').classLi
 const rcClose = () => $('#rcModal').classList.add('hidden');
 $('#rcClose').onclick = rcClose;
 $('#rcModal').onclick = (e) => { if (e.target.id === 'rcModal') rcClose(); };
-$('#rcBtn').onclick = () => {
-  if (!S.geminiKey) {
-    if (confirm('Чтобы распознавать чеки, нужен бесплатный ключ Gemini. Открыть Настройки?')) { go('settings'); setTimeout(() => $('#rcKeyCard').scrollIntoView({ behavior: 'smooth', block: 'start' }), 60); }
-    return;
-  }
-  $('#rcFile').click();
-};
+$('#rcBtn').onclick = () => { if (!S.geminiKey) gemSheet(); else $('#rcFile').click(); };
 $('#rcFile').onchange = async () => {
   const f = $('#rcFile').files[0]; $('#rcFile').value = '';
   if (!f) return;
@@ -2318,7 +2368,7 @@ $('#dayNightBtn').onclick = () => setTheme(DARK_THEMES.includes(effectiveTheme()
 function renderAll() {
   applyTheme();
   $('#nameInput').value = S.name;
-  $('#rcKey').value = S.geminiKey ? '••••••••' : ''; rcKeyMsg();
+  gemRenderAll();
   $('#quote').textContent = QUOTES[new Date().getDate() % QUOTES.length];
   renderTasks(); renderProjects(); renderNotes(); renderHabits(); renderFinance(); renderShow(); renderCalendar();
   renderLinks(); renderOverview(); renderBell(); loadWeather(); renderCloud();
